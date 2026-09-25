@@ -38,7 +38,7 @@ Each spec maps every public Python v4 method and parameter to its PHP equivalent
 
 | # | Spike | Result |
 |---|---|---|
-| [0001](spikes/0001-grpc-transport.md) | Pure-PHP gRPC transport (ADR 0002) | GO: curl matches ext-grpc with libcurl 8.4 or later; Weaviate Cloud TLS still pending |
+| [0001](spikes/0001-grpc-transport.md) | Pure-PHP gRPC transport (ADR 0002) | GO: curl matches or beats ext-grpc (local and Weaviate Cloud) with libcurl 8.4 or later |
 
 ## Decision records
 

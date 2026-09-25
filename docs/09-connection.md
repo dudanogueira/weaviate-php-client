@@ -231,6 +231,14 @@ REST TLS (a custom CA or client cert for HTTPS) is set on the PSR-18 client. Whe
   - We'll add `Headers::openAI($key)` style helpers only as sugar; the source of truth stays a plain array.
 - Header names are case-insensitive, and gRPC metadata keys must be lowercase.
 
+## 5b. HTTP/2 negotiation over TLS (found in spike 0001)
+
+- gRPC over TLS must offer **only `h2`** in ALPN. Weaviate Cloud's Envoy ingress picks `http/1.1` when offered `h2,http/1.1`.
+- `CurlGrpcTransport` always uses HTTP/2 prior knowledge. That offers only `h2` on libcurl 8.12 and later; on older libcurl the transport disables ALPN.
+- The REST endpoint is unaffected, because it speaks HTTP/1.1.
+
+See [spike 0001](spikes/0001-grpc-transport.md), findings 6–7.
+
 ## 6. gRPC-web (server 1.38.3 and later)
 
 Python recently added `grpc_path_prefix`. Weaviate 1.38.3 and later serves **grpc-web on the REST endpoint** at `/v1/grpc-web`. In Python this is only used for WebAssembly/Pyodide, through async and a shim.

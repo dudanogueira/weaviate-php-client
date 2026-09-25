@@ -31,6 +31,12 @@ if docker network inspect "${PROJECT}_default" >/dev/null 2>&1; then
     NETWORK_ARGS=(--network "${PROJECT}_default" -e WEAVIATE_HOST="${WEAVIATE_HOST:-weaviate}")
 fi
 
+# Credentials for the optional cloud tests are passed by name only (never written to disk).
+ENV_ARGS=()
+for var in WEAVIATE_CLOUD_URL WEAVIATE_CLOUD_API_KEY; do
+    [ -n "${!var:-}" ] && ENV_ARGS+=(-e "$var")
+done
+
 TTY_ARGS=()
 [ -t 0 ] && [ -t 1 ] && TTY_ARGS=(-it)
 
@@ -41,6 +47,6 @@ else
     set -- php "$@"
 fi
 
-exec docker run --rm "${TTY_ARGS[@]}" "${NETWORK_ARGS[@]}" \
+exec docker run --rm "${TTY_ARGS[@]}" "${NETWORK_ARGS[@]}" "${ENV_ARGS[@]}" \
     -v "$ROOT:/app" -v "weaviate-php-client-composer-cache:/tmp/composer-cache" \
     -w /app "$IMAGE" "$@"

@@ -31,9 +31,8 @@ Sizes are rough estimates for one engineer who works full-time on the client and
 - `ServerVersion` gating, and the exception hierarchy.
 - `isReady`, `isLive`, `getMeta`, `getOpenIdConfiguration`.
 - **Spike (week 1): done, GO** ([spike 0001](spikes/0001-grpc-transport.md)).
-  - curl matches ext-grpc latency when libcurl is 8.4 or later.
-  - Older libcurl falls back to a fresh connection per call.
-  - The Weaviate Cloud TLS check is pending.
+  - curl matches or beats ext-grpc latency (local and Weaviate Cloud) when libcurl is 8.4 or later.
+  - Older libcurl falls back to a fresh connection per call, which is about 4× slower over TLS.
 - **P0 progress (2026-09-25):**
   - Done: repo, CI, proto codegen, both gRPC transports, the REST transport, the connect helpers, API-key auth, the startup checks and the exception base.
   - Remaining: OIDC, TLS/mTLS config, per-protocol proxies, grpc-web, a typed `Meta` result, and retries.

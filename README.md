@@ -12,7 +12,7 @@ A PHP client for the [Weaviate](https://weaviate.io) vector database.
 
 - PHP 8.2 or later with ext-curl. For gRPC, libcurl must be built with HTTP/2 (nghttp2), which is the default on most distributions.
   - With libcurl 8.4.0 or later, one HTTP/2 connection is reused across calls.
-  - Older libcurl, such as 7.88.1 on Debian bookworm, can't reuse HTTP/2 connections safely, so the client opens a fresh connection per call. That's correct, but slower.
+  - Older libcurl, such as 7.88.1 on Debian bookworm, can't reuse HTTP/2 connections safely, so the client opens a fresh connection per call. That's correct, but **about 4× slower over TLS** (for example, to Weaviate Cloud). Use libcurl 8.4 or later, or install `ext-grpc`.
 - Weaviate 1.29.0 or later ([ADR 0004](docs/decisions/0004-server-version-floor.md)).
 
 ## Install

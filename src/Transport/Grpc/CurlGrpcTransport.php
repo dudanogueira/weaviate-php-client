@@ -12,7 +12,10 @@ use Weaviate\Client\Exceptions\GrpcException;
 /**
  * Pure-PHP gRPC over HTTP/2 using ext-curl (built with nghttp2). Unary calls only.
  *
- * - Plaintext endpoints use h2c with prior knowledge; TLS endpoints negotiate h2 through ALPN.
+ * - Always HTTP/2 with prior knowledge: h2c on plaintext. Over TLS, ALPN must offer **only** "h2", like grpcio
+ *   does. Weaviate Cloud's Envoy ingress picks http/1.1 when a client offers "h2,http/1.1", and gRPC can't run
+ *   on HTTP/1.1 (no trailers). libcurl 8.12+ offers only "h2" in prior-knowledge mode (verified; 8.9.1 and
+ *   older still offer both), so on older libcurl ALPN is disabled over TLS and the h2 preface is sent directly.
  * - The status arrives in HTTP/2 trailers, which libcurl passes to the header callback.
  * - One curl handle is kept per transport, so the HTTP/2 connection is reused across calls.
  * - libcurl before 8.4.0 can't reuse an HTTP/2 connection for a second POST (7.88.1, Debian bookworm, fails
@@ -31,9 +34,14 @@ final class CurlGrpcTransport implements GrpcTransport
     /** First libcurl version verified to reuse HTTP/2 connections correctly (see the class docblock). */
     public const MIN_LIBCURL_FOR_REUSE = '8.4.0';
 
+    /** First libcurl version verified to offer only "h2" in ALPN with HTTP/2 prior knowledge over TLS. */
+    public const MIN_LIBCURL_FOR_H2_ONLY_ALPN = '8.12.0';
+
     private ?\CurlHandle $handle = null;
 
     private readonly bool $reuseConnections;
+
+    private readonly bool $h2OnlyAlpn;
 
     public function __construct(
         private readonly ProtocolParams $endpoint,
@@ -41,6 +49,7 @@ final class CurlGrpcTransport implements GrpcTransport
         private readonly float $connectTimeout = 2.0,
         private readonly ?string $proxy = null,
         private readonly ?string $userAgent = null,
+        ?bool $reuseConnections = null,
     ) {
         if (!self::isSupported()) {
             throw new ConnectionException(
@@ -48,7 +57,9 @@ final class CurlGrpcTransport implements GrpcTransport
                 . 'Install a libcurl with HTTP/2 support, or install ext-grpc.',
             );
         }
-        $this->reuseConnections = self::canReuseConnections();
+        // null = decide from the libcurl version; false forces a fresh connection per call.
+        $this->reuseConnections = $reuseConnections ?? self::canReuseConnections();
+        $this->h2OnlyAlpn = self::libcurlAtLeast(self::MIN_LIBCURL_FOR_H2_ONLY_ALPN);
     }
 
     /**
@@ -56,10 +67,15 @@ final class CurlGrpcTransport implements GrpcTransport
      */
     public static function canReuseConnections(): bool
     {
+        return self::libcurlAtLeast(self::MIN_LIBCURL_FOR_REUSE);
+    }
+
+    private static function libcurlAtLeast(string $minimum): bool
+    {
         $version = curl_version();
 
         return \is_array($version) && \is_string($version['version'] ?? null)
-            && version_compare($version['version'], self::MIN_LIBCURL_FOR_REUSE, '>=');
+            && version_compare($version['version'], $minimum, '>=');
     }
 
     public static function isSupported(): bool
@@ -111,10 +127,12 @@ final class CurlGrpcTransport implements GrpcTransport
             \CURLOPT_POST => true,
             \CURLOPT_POSTFIELDS => Framing::encode($payload),
             \CURLOPT_HTTPHEADER => $headers,
-            \CURLOPT_HTTP_VERSION => $this->endpoint->secure ? \CURL_HTTP_VERSION_2TLS : \CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE,
+            \CURLOPT_HTTP_VERSION => \CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE,
             \CURLOPT_RETURNTRANSFER => true,
             \CURLOPT_TIMEOUT_MS => max(1, (int) ceil($timeout * 1000)),
-            \CURLOPT_CONNECTTIMEOUT_MS => max(1, (int) ceil($this->connectTimeout * 1000)),
+            // Without reuse every call pays a (TLS) handshake, which can stall for seconds over the internet
+            // (measured p95 2.5 s against Weaviate Cloud), so the call's own deadline bounds the connect too.
+            \CURLOPT_CONNECTTIMEOUT_MS => max(1, (int) ceil(($this->reuseConnections ? min($this->connectTimeout, $timeout) : $timeout) * 1000)),
             \CURLOPT_TCP_KEEPALIVE => 1,
             \CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$received): int {
                 $colon = strpos($line, ':');
@@ -125,6 +143,9 @@ final class CurlGrpcTransport implements GrpcTransport
                 return \strlen($line);
             },
         ];
+        if ($this->endpoint->secure && !$this->h2OnlyAlpn) {
+            $options[\CURLOPT_SSL_ENABLE_ALPN] = false;
+        }
         if (!$this->reuseConnections) {
             $options[\CURLOPT_FORBID_REUSE] = true;
             $options[\CURLOPT_FRESH_CONNECT] = true;
@@ -183,6 +204,11 @@ final class CurlGrpcTransport implements GrpcTransport
         }
 
         return $response;
+    }
+
+    public function reusesConnections(): bool
+    {
+        return $this->reuseConnections;
     }
 
     public function supportsBidiStreaming(): bool

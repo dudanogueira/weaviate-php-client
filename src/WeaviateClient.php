@@ -94,6 +94,14 @@ final class WeaviateClient
         $this->serverVersion = ServerVersion::parse(\is_string($meta['version'] ?? null) ? $meta['version'] : '');
 
         $this->grpc = $this->createGrpcTransport();
+        if ($this->grpc instanceof CurlGrpcTransport && !$this->grpc->reusesConnections() && $this->connectionParams->grpc->secure) {
+            $this->logger->warning(\sprintf(
+                'libcurl %s cannot reuse HTTP/2 connections, so every gRPC call opens a new TLS connection '
+                . '(about 4x slower against Weaviate Cloud). Use libcurl %s or later, or install ext-grpc.',
+                self::libcurlVersion(),
+                CurlGrpcTransport::MIN_LIBCURL_FOR_REUSE,
+            ));
+        }
         if (isset($meta['grpcMaxMessageSize']) && is_numeric($meta['grpcMaxMessageSize'])) {
             $size = (int) $meta['grpcMaxMessageSize'];
             if ($this->grpc instanceof CurlGrpcTransport || $this->grpc instanceof ExtGrpcTransport) {
@@ -254,6 +262,13 @@ final class WeaviateClient
                 (string) $response->getStatus(),
             ));
         }
+    }
+
+    private static function libcurlVersion(): string
+    {
+        $version = curl_version();
+
+        return \is_array($version) && \is_string($version['version'] ?? null) ? $version['version'] : 'unknown';
     }
 
     private function createGrpcTransport(): GrpcTransport

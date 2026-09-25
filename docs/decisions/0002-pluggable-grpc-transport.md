@@ -1,6 +1,6 @@
 # ADR 0002: Pluggable gRPC transport, pure-PHP default
 
-- **Status:** Accepted. The spike **passed** on 2026-09-25 ([spike 0001](../spikes/0001-grpc-transport.md)); only the Weaviate Cloud TLS check is still pending.
+- **Status:** Accepted. The spike **passed** on 2026-09-25, including against Weaviate Cloud over TLS ([spike 0001](../spikes/0001-grpc-transport.md)).
 - **Date:** 2026-09-25
 
 ## Context
