@@ -11,6 +11,7 @@ use Weaviate\Client\Transport\Grpc\GrpcTransport;
 /**
  * Rarely-used connection settings. Python `AdditionalConfig`; see docs/09-connection.md §4.
  *
+ * - `maxResponseBytes`: the largest REST body or gRPC message accepted (security review S2/S8).
  * - `proxies`: one proxy URL for REST and gRPC. When null, the environment (HTTP_PROXY, HTTPS_PROXY,
  *   grpc_proxy, …) is ignored unless `trustEnv` is true, like Python's `trust_env=False` default.
  *
@@ -18,6 +19,12 @@ use Weaviate\Client\Transport\Grpc\GrpcTransport;
  */
 final readonly class AdditionalConfig
 {
+    /**
+     * Ceiling for any single REST response body and gRPC message (256 MiB). The server's
+     * `grpcMaxMessageSize` can lower the gRPC limit but not raise it above this.
+     */
+    public const DEFAULT_MAX_RESPONSE_BYTES = 268_435_456;
+
     public Timeout $timeout;
 
     /**
@@ -31,8 +38,12 @@ final readonly class AdditionalConfig
         public ?ClientInterface $httpClient = null,
         public ?LoggerInterface $logger = null,
         public bool $trustEnv = false,
+        public int $maxResponseBytes = self::DEFAULT_MAX_RESPONSE_BYTES,
     ) {
         $this->timeout = Timeout::from($timeout);
+        if ($maxResponseBytes < 1024) {
+            throw new \Weaviate\Client\Exceptions\InvalidInputException('maxResponseBytes must be at least 1024');
+        }
     }
 
     /**

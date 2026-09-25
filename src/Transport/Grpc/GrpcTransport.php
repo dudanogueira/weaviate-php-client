@@ -33,7 +33,7 @@ interface GrpcTransport
      * @throws AuthenticationException          on UNAUTHENTICATED
      * @throws InsufficientPermissionsException on PERMISSION_DENIED
      */
-    public function unary(string $method, Message $request, string $responseClass, float $timeout, array $metadata = []): Message;
+    public function unary(string $method, Message $request, string $responseClass, float $timeout, #[\SensitiveParameter] array $metadata = []): Message;
 
     /**
      * Whether bidirectional streaming (BatchStream) is available on this transport.

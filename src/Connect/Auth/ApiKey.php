@@ -22,6 +22,10 @@ final class ApiKey implements AuthCredentials, \JsonSerializable
         if (trim($apiKey) === '') {
             throw new InvalidInputException('API key must not be empty');
         }
+        if (preg_match('/[\r\n\0]/', $apiKey) === 1) {
+            // It becomes a header value; a line break would inject extra headers (security review S7).
+            throw new InvalidInputException('API key contains a line break or NUL byte');
+        }
         self::$keys ??= new \WeakMap();
         self::$keys[$this] = $apiKey;
     }

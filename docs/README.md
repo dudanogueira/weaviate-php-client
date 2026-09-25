@@ -46,6 +46,12 @@ Each spec maps every public Python v4 method and parameter to its PHP equivalent
 |---|---|---|
 | 2026-09-25 | [P0 connection layer + Python parity](qa/2026-09-25-p0-review.md) | 16 findings fixed (2 P1). Tests went from 45 to 124. The collections parity audit found no gaps; the client scope got 6 additions |
 
+## Security reviews
+
+| Date | Review | Result |
+|---|---|---|
+| 2026-09-25 | [Whole client, CI, dependencies, history](security/2026-09-25-review.md) | 14 findings (1 High, 4 Medium) fixed with regression tests; automated scans clean |
+
 ## Decision records
 
 | ADR | Decision | Status |

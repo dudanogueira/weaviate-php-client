@@ -63,6 +63,16 @@ bin/php composer install
 bin/php vendor/bin/phpunit
 ```
 
+## Security
+
+- TLS is always verified.
+- The built-in HTTP client (Guzzle) **never follows redirects**, doesn't decompress responses, and caps response size.
+- Credentials never appear in dumps, logs or exceptions.
+
+If you inject your own PSR-18 client (`AdditionalConfig(httpClient: …)`), configure the same things on it: redirects off, timeouts and proxies. The client can't enforce them on a client it didn't build.
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
 ## Relationship to `timkley/weaviate-php`
 
 [`timkley/weaviate-php`](https://github.com/timkley/weaviate-php) is the community client this project builds on the experience of. It uses REST and raw GraphQL. The two packages use different namespaces (`Weaviate\` vs `Weaviate\Client\`), so they can be installed side by side while you migrate ([migration guide](docs/07-migration-from-timkley.md)).

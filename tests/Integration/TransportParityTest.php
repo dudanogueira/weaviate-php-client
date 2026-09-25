@@ -16,6 +16,7 @@ use Weaviate\Client\Transport\Grpc\CurlGrpcTransport;
 use Weaviate\Client\Transport\Grpc\ExtGrpcTransport;
 use Weaviate\Client\Transport\Grpc\GrpcStatus;
 use Weaviate\Client\Transport\Grpc\GrpcTransport;
+use Weaviate\Client\Transport\Rest\RestTransport;
 
 /**
  * QA F8: both transports report the same failure the same way (exception class and gRPC status).
@@ -68,7 +69,7 @@ final class TransportParityTest extends IntegrationTestCase
                 5.0,
             ));
         } finally {
-            $rest->request('DELETE', '/schema/' . $collection);
+            $rest->request('DELETE', RestTransport::path('schema', $collection));
             $client->close();
         }
     }

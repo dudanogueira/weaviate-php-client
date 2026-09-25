@@ -13,6 +13,7 @@ use Weaviate\Client\Connect\Auth\AuthCredentials;
 use Weaviate\Client\Connect\ConnectionParams;
 use Weaviate\Client\Connect\GrpcTransportChoice;
 use Weaviate\Client\Connect\Headers;
+use Weaviate\Client\Connect\SecretHeaders;
 use Weaviate\Client\Exceptions\AuthenticationException;
 use Weaviate\Client\Exceptions\ClientClosedException;
 use Weaviate\Client\Exceptions\ConnectionException;
@@ -46,8 +47,8 @@ final class WeaviateClient
     private readonly LoggerInterface $logger;
     private readonly ?AuthCredentials $auth;
 
-    /** @var array<string, string> REST headers and gRPC metadata, lowercase names */
-    private array $headers;
+    /** REST headers and gRPC metadata (lowercase names); values are kept out of dumps and casts. */
+    private readonly SecretHeaders $headers;
 
     private ?RestTransport $rest = null;
     private ?GrpcTransport $grpc = null;
@@ -69,7 +70,7 @@ final class WeaviateClient
         $this->config = $additionalConfig ?? new AdditionalConfig();
         $this->logger = $this->config->logger ?? new NullLogger();
         $this->auth = Auth::parse($auth);
-        $this->headers = $this->buildHeaders($headers);
+        $this->headers = new SecretHeaders($this->buildHeaders($headers));
     }
 
     public function __destruct()
@@ -88,8 +89,16 @@ final class WeaviateClient
             'connected' => $this->connected,
             'serverVersion' => $this->serverVersion === null ? null : (string) $this->serverVersion,
             'grpcTransport' => $this->grpc?->name(),
-            'headers' => Headers::redact($this->headers),
+            'headers' => $this->headers->redacted(),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __serialize(): array
+    {
+        throw new \LogicException('A client holding credentials cannot be serialized; create a new one instead.');
     }
 
     /**
@@ -117,6 +126,8 @@ final class WeaviateClient
             $this->config->httpClient,
             $this->config->proxies,
             $this->config->trustEnv,
+            $this->config->maxResponseBytes,
+            $this->logger,
         );
 
         // /v1/meta always runs, even with skipInitChecks: it gives the version and the gRPC message limit.
@@ -143,7 +154,8 @@ final class WeaviateClient
 
         $grpc = $this->createGrpcTransport();
         if (is_numeric($meta['grpcMaxMessageSize'] ?? null) && ($grpc instanceof CurlGrpcTransport || $grpc instanceof ExtGrpcTransport)) {
-            $grpc->setMaxMessageLength((int) $meta['grpcMaxMessageSize']); // ignores values <= 0
+            // The server may raise the limit, but never above the client's own ceiling (security review S8).
+            $grpc->setMaxMessageLength(min((int) $meta['grpcMaxMessageSize'], $this->config->maxResponseBytes)); // ignores <= 0
         }
         if ($grpc instanceof CurlGrpcTransport && !$grpc->reusesConnections() && $this->connectionParams->grpc->secure) {
             $this->logger->warning(\sprintf(
@@ -265,7 +277,7 @@ final class WeaviateClient
      */
     public function grpcMetadata(): array
     {
-        return $this->headers;
+        return $this->headers->all();
     }
 
     /**
@@ -301,7 +313,7 @@ final class WeaviateClient
         }
 
         try {
-            $response = $grpc->unary(self::HEALTH_METHOD, new WeaviateHealthCheckRequest(), WeaviateHealthCheckResponse::class, $timeout, $this->headers);
+            $response = $grpc->unary(self::HEALTH_METHOD, new WeaviateHealthCheckRequest(), WeaviateHealthCheckResponse::class, $timeout, $this->headers->all());
         } catch (AuthenticationException|InsufficientPermissionsException $e) {
             throw $e; // the endpoint is reachable; the credentials are the problem
         } catch (GrpcException|ConnectionException $e) {
@@ -319,6 +331,21 @@ final class WeaviateClient
                 $response->getStatus(),
             ));
         }
+    }
+
+    /**
+     * Suffix match on a label boundary. Python uses a substring check (`"weaviate.io" in host`), which also
+     * matches hosts like "weaviate.io.example.com"; PHP deliberately doesn't (security review S14).
+     */
+    private static function isWeaviateDomain(string $host): bool
+    {
+        foreach (['weaviate.io', 'weaviate.cloud', 'semi.technology'] as $domain) {
+            if ($host === $domain || str_ends_with($host, '.' . $domain)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function libcurlVersion(): string
@@ -373,9 +400,8 @@ final class WeaviateClient
     {
         $headers = ['x-weaviate-client' => 'weaviate-client-php/' . Version::CLIENT . '-sync'];
 
-        $host = $this->connectionParams->http->host;
-        if (str_contains($host, 'weaviate.io') || str_contains($host, 'weaviate.cloud') || str_contains($host, 'semi.technology')) {
-            $headers['x-weaviate-cluster-url'] = 'https://' . $host;
+        if (self::isWeaviateDomain($this->connectionParams->http->host)) {
+            $headers['x-weaviate-cluster-url'] = 'https://' . $this->connectionParams->http->host;
         }
 
         foreach (Headers::normalize($userHeaders) as $name => $value) {

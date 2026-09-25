@@ -113,6 +113,11 @@ final class Weaviate
             if ($parts === false || !isset($parts['host'])) {
                 throw new InvalidInputException(\sprintf('Invalid cluster URL: %s', $clusterUrl));
             }
+            if (isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
+                // "https://x.weaviate.cloud@evil.com" or "https://evil.com#.weaviate.cloud" would connect to
+                // evil.com (security review S14).
+                throw new InvalidInputException(\sprintf('The cluster URL must not contain credentials or a fragment: "%s"', $clusterUrl));
+            }
             if (isset($parts['port']) || trim($parts['path'] ?? '', '/') !== '' || isset($parts['query'])) {
                 throw new InvalidInputException(\sprintf(
                     'Pass the cluster URL without port, path or query (e.g. "abc123.c0.europe-west3.gcp.weaviate.cloud"), got "%s"',

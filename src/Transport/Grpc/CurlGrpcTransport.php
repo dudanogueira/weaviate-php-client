@@ -94,6 +94,11 @@ final class CurlGrpcTransport implements GrpcTransport
         return \is_array($version) && \is_int($version['features'] ?? null) && ($version['features'] & \CURL_VERSION_HTTP2) !== 0;
     }
 
+    public function maxMessageLength(): int
+    {
+        return $this->maxMessageLength;
+    }
+
     public function setMaxMessageLength(int $maxMessageLength): void
     {
         if ($maxMessageLength > 0) {
@@ -109,7 +114,7 @@ final class CurlGrpcTransport implements GrpcTransport
         return ['endpoint' => $this->endpoint->url(), 'reuseConnections' => $this->reuseConnections, 'proxy' => $this->proxy === null ? null : '***'];
     }
 
-    public function unary(string $method, Message $request, string $responseClass, float $timeout, array $metadata = []): Message
+    public function unary(string $method, Message $request, string $responseClass, float $timeout, #[\SensitiveParameter] array $metadata = []): Message
     {
         $payload = $request->serializeToString();
         if (\strlen($payload) > $this->maxMessageLength) {

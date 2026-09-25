@@ -24,6 +24,7 @@ use Weaviate\Client\Proto\V1\Vectors;
 use Weaviate\Client\Proto\V1\Vectors\VectorType;
 use Weaviate\Client\Transport\Grpc\ExtGrpcTransport;
 use Weaviate\Client\Transport\Grpc\GrpcStatus;
+use Weaviate\Client\Transport\Rest\RestTransport;
 use Weaviate\Client\Weaviate;
 use Weaviate\Client\WeaviateClient;
 
@@ -167,13 +168,13 @@ final class CloudTest extends TestCase
     private static function ensureFixture(WeaviateClient $client): void
     {
         $rest = $client->restTransport();
-        $existing = $rest->request('GET', '/schema/' . self::COLLECTION);
+        $existing = $rest->request('GET', RestTransport::path('schema', self::COLLECTION));
 
         if ($existing->statusCode === 200) {
             $description = \is_array($existing->body) ? ($existing->body['description'] ?? null) : null;
             if ($description !== self::FIXTURE_VERSION) {
-                $rest->requestExpecting('DELETE', '/schema/' . self::COLLECTION, 'Drop outdated fixture');
-                $existing = $rest->request('GET', '/schema/' . self::COLLECTION);
+                $rest->requestExpecting('DELETE', RestTransport::path('schema', self::COLLECTION), 'Drop outdated fixture');
+                $existing = $rest->request('GET', RestTransport::path('schema', self::COLLECTION));
             }
         }
         if ($existing->statusCode !== 200) {
@@ -195,7 +196,7 @@ final class CloudTest extends TestCase
             }
         }
 
-        $tenants = $rest->requestExpecting('GET', '/schema/' . self::COLLECTION . '/tenants', 'Get tenants')->body;
+        $tenants = $rest->requestExpecting('GET', RestTransport::path('schema', self::COLLECTION, 'tenants'), 'Get tenants')->body;
         $have = [];
         foreach (\is_array($tenants) ? $tenants : [] as $tenant) {
             if (\is_array($tenant) && \is_string($tenant['name'] ?? null)) {
@@ -204,7 +205,7 @@ final class CloudTest extends TestCase
         }
         $missing = array_values(array_diff(array_keys(self::OBJECTS), $have));
         if ($missing !== []) {
-            $rest->requestExpecting('POST', '/schema/' . self::COLLECTION . '/tenants', 'Create tenants', body: array_map(
+            $rest->requestExpecting('POST', RestTransport::path('schema', self::COLLECTION, 'tenants'), 'Create tenants', body: array_map(
                 static fn(string $name): array => ['name' => $name],
                 $missing,
             ));

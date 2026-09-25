@@ -14,6 +14,7 @@ use Weaviate\Client\Exceptions\InsufficientPermissionsException;
 use Weaviate\Client\Proto\V1\SearchReply;
 use Weaviate\Client\Proto\V1\SearchRequest;
 use Weaviate\Client\Transport\Grpc\ExtGrpcTransport;
+use Weaviate\Client\Transport\Rest\RestTransport;
 use Weaviate\Client\Weaviate;
 use Weaviate\Client\WeaviateClient;
 
@@ -79,7 +80,7 @@ final class AuthTest extends TestCase
         } catch (InsufficientPermissionsException $e) {
             self::assertSame(403, $e->statusCode);
         } finally {
-            $admin->restTransport()->request('DELETE', '/schema/' . $collection);
+            $admin->restTransport()->request('DELETE', RestTransport::path('schema', $collection));
             $admin->close();
             $norole->close();
         }

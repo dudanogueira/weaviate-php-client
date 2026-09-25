@@ -9,7 +9,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git unzip \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.10.3 /usr/bin/composer /usr/bin/composer
 
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_CACHE_DIR=/tmp/composer-cache

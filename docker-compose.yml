@@ -5,14 +5,16 @@
 #
 #   docker compose --profile auth up -d weaviate-auth     # API keys + RBAC, for --group auth
 #
+# Ports bind to 127.0.0.1 only: these servers allow anonymous writes / use well-known test keys.
+#
 # WEAVIATE_VERSION defaults to the version the protos are pinned to (proto/VERSION).
 services:
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:${WEAVIATE_VERSION:-1.39.7}
     command: ["--host", "0.0.0.0", "--port", "8080", "--scheme", "http"]
     ports:
-      - "8080:8080"
-      - "50051:50051"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:50051:50051"
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
@@ -34,8 +36,8 @@ services:
     image: cr.weaviate.io/semitechnologies/weaviate:${WEAVIATE_VERSION:-1.39.7}
     command: ["--host", "0.0.0.0", "--port", "8080", "--scheme", "http"]
     ports:
-      - "8081:8080"
-      - "50052:50051"
+      - "127.0.0.1:8081:8080"
+      - "127.0.0.1:50052:50051"
     environment:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "false"
       AUTHENTICATION_APIKEY_ENABLED: "true"

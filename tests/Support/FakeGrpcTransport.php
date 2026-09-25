@@ -36,7 +36,7 @@ final class FakeGrpcTransport implements GrpcTransport
         return $this;
     }
 
-    public function unary(string $method, Message $request, string $responseClass, float $timeout, array $metadata = []): Message
+    public function unary(string $method, Message $request, string $responseClass, float $timeout, #[\SensitiveParameter] array $metadata = []): Message
     {
         $this->calls[] = ['method' => $method, 'request' => $request, 'timeout' => $timeout, 'metadata' => $metadata];
         $response = $this->responses[$method] ?? throw new \LogicException('no fake response for ' . $method);

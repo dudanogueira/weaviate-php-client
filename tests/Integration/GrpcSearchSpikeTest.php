@@ -18,6 +18,7 @@ use Weaviate\Client\Proto\V1\Vectors;
 use Weaviate\Client\Proto\V1\Vectors\VectorType;
 use Weaviate\Client\Transport\Grpc\ExtGrpcTransport;
 use Weaviate\Client\Transport\Grpc\GrpcStatus;
+use Weaviate\Client\Transport\Rest\RestTransport;
 use Weaviate\Client\WeaviateClient;
 
 /**
@@ -78,7 +79,7 @@ final class GrpcSearchSpikeTest extends IntegrationTestCase
             self::assertSame('gamma', self::title($best));
             self::assertEqualsWithDelta(0.0, $best->getMetadata()?->getDistance(), 1e-6);
         } finally {
-            $client->restTransport()->request('DELETE', '/schema/' . $collection);
+            $client->restTransport()->request('DELETE', RestTransport::path('schema', $collection));
             $client->close();
         }
     }
@@ -112,7 +113,7 @@ final class GrpcSearchSpikeTest extends IntegrationTestCase
                 self::assertCount(3, $reply->getResults());
             }
         } finally {
-            $client->restTransport()->request('DELETE', '/schema/' . $collection);
+            $client->restTransport()->request('DELETE', RestTransport::path('schema', $collection));
             $client->close();
         }
     }

@@ -6,17 +6,26 @@
 set -euo pipefail
 
 TAG="${1:?usage: bin/sync-protos <weaviate tag, e.g. v1.39.7>}"
+# Only release tags: a branch name would make the vendored protos unpinned (security review S13).
+if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+    echo "not a release tag: $TAG" >&2
+    exit 1
+fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="$ROOT/proto/v1"
 BASE="https://raw.githubusercontent.com/weaviate/weaviate/${TAG}/grpc/proto/v1"
 LIST_URL="https://api.github.com/repos/weaviate/weaviate/contents/grpc/proto/v1?ref=${TAG}"
 
-files="$(curl -fsSL "$LIST_URL" | grep -o '"name": *"[^"]*\.proto"' | sed 's/.*"\([^"]*\)"$/\1/')"
-[ -n "$files" ] || { echo "no .proto files found for $TAG" >&2; exit 1; }
+files=()
+while IFS= read -r name; do
+    [[ "$name" =~ ^[a-z0-9_]+\.proto$ ]] || { echo "unexpected file name: $name" >&2; exit 1; }
+    files+=("$name")
+done < <(curl -fsSL "$LIST_URL" | grep -o '"name": *"[^"]*\.proto"' | sed 's/.*"\([^"]*\)"$/\1/')
+[ "${#files[@]}" -gt 0 ] || { echo "no .proto files found for $TAG" >&2; exit 1; }
 
 rm -f "$DEST"/*.proto
 mkdir -p "$DEST"
-for f in $files; do
+for f in "${files[@]}"; do
     curl -fsSL "$BASE/$f" -o "$DEST/$f"
     echo "synced $f"
 done

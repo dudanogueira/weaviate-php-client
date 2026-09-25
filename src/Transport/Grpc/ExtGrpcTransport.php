@@ -59,7 +59,7 @@ final class ExtGrpcTransport implements GrpcTransport
         return ['endpoint' => $this->endpoint->url(), 'proxy' => $this->proxy === null ? null : '***'];
     }
 
-    public function unary(string $method, Message $request, string $responseClass, float $timeout, array $metadata = []): Message
+    public function unary(string $method, Message $request, string $responseClass, float $timeout, #[\SensitiveParameter] array $metadata = []): Message
     {
         $payload = $request->serializeToString();
         if (\strlen($payload) > $this->maxMessageLength) {

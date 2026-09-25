@@ -22,6 +22,7 @@ use Weaviate\Client\Proto\V1\Vectors;
 use Weaviate\Client\Proto\V1\Vectors\VectorType;
 use Weaviate\Client\Transport\Grpc\CurlGrpcTransport;
 use Weaviate\Client\Transport\Grpc\ExtGrpcTransport;
+use Weaviate\Client\Transport\Rest\RestTransport;
 use Weaviate\Client\Weaviate;
 use Weaviate\Client\WeaviateClient;
 
@@ -124,7 +125,7 @@ try {
         }
     }
 } finally {
-    $setup->restTransport()->request('DELETE', '/schema/' . $collection);
+    $setup->restTransport()->request('DELETE', RestTransport::path('schema', $collection));
 }
 
 if (isset($transports['ext-grpc'])) {

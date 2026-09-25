@@ -17,8 +17,8 @@ jobs:
     name: PHPStan + code style
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.4'
           coverage: none
@@ -33,11 +33,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PROTOC_VERSION: '35.0'
+      # sha256 of protoc-35.0-linux-x86_64.zip, from the GitHub release asset digest
+      PROTOC_SHA256: a45cda0989c17dd950db55f6fbe1e5814c50fda08e87aa422980ac1f89dddbbc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install protoc
         run: |
           curl -fsSL -o /tmp/protoc.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          echo "${PROTOC_SHA256}  /tmp/protoc.zip" | sha256sum -c -
           sudo unzip -q -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           protoc --version
       - run: bin/generate-protos
@@ -56,8 +59,8 @@ jobs:
         include:
           - { php: '8.4', deps: stable, os: windows-latest }
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: ${{ matrix.php }}
           coverage: none
@@ -90,8 +93,8 @@ jobs:
           CLUSTER_HOSTNAME: node1
           DISABLE_TELEMETRY: 'true'
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: ${{ matrix.php }}
           extensions: ${{ matrix.grpc && 'grpc' || '' }}
@@ -126,8 +129,8 @@ jobs:
           CLUSTER_HOSTNAME: node1
           DISABLE_TELEMETRY: 'true'
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.4'
           extensions: grpc

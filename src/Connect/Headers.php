@@ -81,7 +81,7 @@ final class Headers
      *
      * @return array<string, string>
      */
-    public static function redact(array $headers): array
+    public static function redact(#[\SensitiveParameter] array $headers): array
     {
         foreach ($headers as $name => $value) {
             if (self::isSensitive($name)) {
