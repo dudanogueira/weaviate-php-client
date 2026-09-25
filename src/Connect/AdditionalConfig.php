@@ -11,9 +11,10 @@ use Weaviate\Client\Transport\Grpc\GrpcTransport;
 /**
  * Rarely-used connection settings. Python `AdditionalConfig`; see docs/09-connection.md §4.
  *
- * P0 status: timeout, proxy (one URL for every protocol), transport choice, PSR-18 client and PSR-3 logger.
- * Per-protocol proxies, trustEnv, GrpcConfig (TLS/mTLS, channel options), the connection pool and retries
- * land later in P0.
+ * - `proxies`: one proxy URL for REST and gRPC. When null, the environment (HTTP_PROXY, HTTPS_PROXY,
+ *   grpc_proxy, …) is ignored unless `trustEnv` is true, like Python's `trust_env=False` default.
+ *
+ * P0 status: per-protocol Proxies, GrpcConfig (TLS/mTLS, channel options) and the connection pool land later.
  */
 final readonly class AdditionalConfig
 {
@@ -24,11 +25,26 @@ final readonly class AdditionalConfig
      */
     public function __construct(
         Timeout|array $timeout = new Timeout(),
+        #[\SensitiveParameter]
         public ?string $proxies = null,
         public GrpcTransportChoice|GrpcTransport $grpcTransport = GrpcTransportChoice::Auto,
         public ?ClientInterface $httpClient = null,
         public ?LoggerInterface $logger = null,
+        public bool $trustEnv = false,
     ) {
         $this->timeout = Timeout::from($timeout);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'timeout' => $this->timeout,
+            'proxies' => $this->proxies === null ? null : '***',
+            'grpcTransport' => $this->grpcTransport instanceof GrpcTransport ? $this->grpcTransport->name() : $this->grpcTransport->name,
+            'trustEnv' => $this->trustEnv,
+        ];
     }
 }

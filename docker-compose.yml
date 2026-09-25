@@ -3,6 +3,8 @@
 #   docker compose up -d weaviate
 #   bin/php vendor/bin/phpunit --testsuite integration
 #
+#   docker compose --profile auth up -d weaviate-auth     # API keys + RBAC, for --group auth
+#
 # WEAVIATE_VERSION defaults to the version the protos are pinned to (proto/VERSION).
 services:
   weaviate:
@@ -17,6 +19,32 @@ services:
       PERSISTENCE_DATA_PATH: /var/lib/weaviate
       DEFAULT_VECTORIZER_MODULE: none
       ENABLE_MODULES: ""
+      CLUSTER_HOSTNAME: node1
+      DISABLE_TELEMETRY: "true"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  # API-key auth with RBAC: "admin-key" is root; "norole-key" is a valid user with no roles, so every action
+  # it takes is denied (403 / PERMISSION_DENIED). Used by tests/Integration/AuthTest.php (--group auth).
+  weaviate-auth:
+    profiles: [auth]
+    image: cr.weaviate.io/semitechnologies/weaviate:${WEAVIATE_VERSION:-1.39.7}
+    command: ["--host", "0.0.0.0", "--port", "8080", "--scheme", "http"]
+    ports:
+      - "8081:8080"
+      - "50052:50051"
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "false"
+      AUTHENTICATION_APIKEY_ENABLED: "true"
+      AUTHENTICATION_APIKEY_ALLOWED_KEYS: "admin-key,norole-key"
+      AUTHENTICATION_APIKEY_USERS: "admin,norole"
+      AUTHORIZATION_RBAC_ENABLED: "true"
+      AUTHORIZATION_RBAC_ROOT_USERS: "admin"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: none
       CLUSTER_HOSTNAME: node1
       DISABLE_TELEMETRY: "true"
     healthcheck:

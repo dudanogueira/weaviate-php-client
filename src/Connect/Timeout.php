@@ -7,7 +7,8 @@ namespace Weaviate\Client\Connect;
 use Weaviate\Client\Exceptions\InvalidInputException;
 
 /**
- * Timeouts in seconds per class of operation. Python `Timeout`; see docs/09-connection.md §4.1.
+ * Timeouts in seconds per class of operation, all > 0 (`stream` null = no limit). Python `Timeout`;
+ * see docs/09-connection.md §4.1.
  */
 final readonly class Timeout
 {
@@ -17,9 +18,10 @@ final readonly class Timeout
         public int|float $init = 2,
         public int|float|null $stream = null,
     ) {
-        foreach (['query' => $query, 'insert' => $insert, 'init' => $init, 'stream' => $stream ?? 0] as $name => $value) {
-            if ($value < 0) {
-                throw new InvalidInputException(\sprintf('timeout %s must be >= 0, got %s', $name, $value));
+        // 0 would mean "no limit" to Guzzle but 1 ms to curl and ext-grpc, so it's rejected; use a large value.
+        foreach (['query' => $query, 'insert' => $insert, 'init' => $init, 'stream' => $stream ?? 1] as $name => $value) {
+            if ($value <= 0) {
+                throw new InvalidInputException(\sprintf('timeout %s must be > 0 seconds, got %s', $name, $value));
             }
         }
     }

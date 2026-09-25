@@ -232,17 +232,17 @@ Every row also takes the shared parameters in §5.1. "Params" lists the Python n
 | `custom` → `custom` | `{module_name}` | `module_name`* (string), `module_config` (array, sent verbatim). Takes `sourceProperties`, not `vectorizeCollectionName` |
 | `text2vec_aws_bedrock` → `text2vecAwsBedrock` | `text2vec-aws` | `model`*→`model`, `region`*→`region`, `dimensions`; fixed `service: "bedrock"` |
 | `text2vec_aws_sagemaker` → `text2vecAwsSagemaker` | `text2vec-aws` | `endpoint`*, `region`*, `target_model`→`targetModel`, `target_variant`→`targetVariant`, `dimensions`; fixed `service: "sagemaker"` |
-| `text2vec_aws` → `text2vecAws` (**deprecated**, removed after Q3'26) | `text2vec-aws` | `model`* (Optional, but has no default), `region`*, `endpoint`, `service`=`'bedrock'`, `dimensions` |
+| `text2vec_aws` (**deprecated**, removed after Q3'26; **not ported**, §14) | `text2vec-aws` | `model`* (Optional, but has no default), `region`*, `endpoint`, `service`=`'bedrock'`, `dimensions` |
 | `text2vec_azure_openai` → `text2vecAzureOpenAI` | `text2vec-openai` | `resource_name`*→`resourceName`, `deployment_id`*→`deploymentId`, `base_url`→`baseURL`, `dimensions`, `model`; always adds `isAzure: true` |
 | `text2vec_cohere` → `text2vecCohere` | `text2vec-cohere` | `base_url`→`baseURL`, `model`, `dimensions`, `truncate` (`NONE\|START\|END\|LEFT\|RIGHT`) |
 | `text2vec_contextionary` → `text2vecContextionary` (**deprecated**) | `text2vec-contextionary` | — |
 | `text2vec_databricks` → `text2vecDatabricks` | `text2vec-databricks` | `endpoint`*, `instruction` |
 | `text2vec_digitalocean` → `text2vecDigitalOcean` | `text2vec-digitalocean` | `model`*, `base_url`→`baseURL` |
-| `text2vec_gpt4all` → `text2vecGpt4All` (**deprecated**, removed after Q3'26) | `text2vec-gpt4all` | — |
+| `text2vec_gpt4all` (**deprecated**, removed after Q3'26; **not ported**, §14) | `text2vec-gpt4all` | — |
 | `text2vec_google_vertex` → `text2vecGoogleVertex` | `text2vec-palm` | `project_id`*→`projectId`, `api_endpoint`→`apiEndpoint`, `dimensions`, `model`→`modelId`, `title_property`→`titleProperty`, `task_type`→`taskType`, `location` |
 | `text2vec_google_gemini` → `text2vecGoogleGemini` | `text2vec-palm` | `dimensions`, `model`→`modelId`, `title_property`, `task_type`; fixed `apiEndpoint: "generativelanguage.googleapis.com"` |
-| `text2vec_google` → `text2vecGoogle` (**deprecated**) | `text2vec-palm` | Same as vertex |
-| `text2vec_google_aistudio` → `text2vecGoogleAiStudio` (**deprecated**) | `text2vec-palm` | Same as gemini |
+| `text2vec_google` (**deprecated**; **not ported**, §14) | `text2vec-palm` | Same as vertex |
+| `text2vec_google_aistudio` (**deprecated**; **not ported**, §14) | `text2vec-palm` | Same as gemini |
 | `text2vec_huggingface` → `text2vecHuggingFace` | `text2vec-huggingface` | `model`, `passage_model`→`passageModel`, `query_model`→`queryModel`, `endpoint_url`→`endpointURL`, `wait_for_model`/`use_gpu`/`use_cache` → **nested** `options.{waitForModel,useGPU,useCache}` (the `options` key is only added when at least one is set) |
 | `text2vec_jinaai` → `text2vecJinaAI` | `text2vec-jinaai` | `base_url`→`baseURL`, `dimensions`, `model` |
 | `text2vec_mistral` → `text2vecMistral` | `text2vec-mistral` | `base_url`, `model` |
@@ -265,7 +265,7 @@ These take the shared `name`, `quantizer` and `vectorIndexConfig`, but **not** `
 |---|---|---|
 | `img2vec_neural` → `img2vecNeural` | `img2vec-neural` | `image_fields`* (`list<string>`) → `imageFields` |
 | `multi2vec_aws_bedrock` → `multi2vecAwsBedrock` | `multi2vec-aws` | `region`, `model`, `dimensions`, `image_fields`, `text_fields` |
-| `multi2vec_aws` → `multi2vecAws` (**deprecated**) | `multi2vec-aws` | same |
+| `multi2vec_aws` (**deprecated**; **not ported**, §14) | `multi2vec-aws` | same |
 | `multi2vec_bind` → `multi2vecBind` | `multi2vec-bind` | `audio_fields`, `depth_fields`, `image_fields`, `imu_fields`→**`IMUFields`**, `text_fields`, `thermal_fields`, `video_fields` |
 | `multi2vec_clip` → `multi2vecClip` | `multi2vec-clip` | `inference_url`→`inferenceUrl`, `image_fields`, `text_fields` |
 | `multi2vec_cohere` → `multi2vecCohere` | `multi2vec-cohere` | `base_url`→`baseURL`, `model`, `dimensions`, `truncate`, `image_fields`, `text_fields` (+ ignored `vectorize_collection_name`) |
@@ -340,9 +340,9 @@ Every enabled quantizer serializes as `"<name>": {"enabled": true, …}`.
 
 | Factory | Python params → wire | Min server | Notes |
 |---|---|---|---|
-| `pq()` | `centroids`, `segments`, `training_limit`→`trainingLimit`, `encoder_type: ?PQEncoderType` → `encoder.type`, `encoder_distribution: ?PQEncoderDistribution` → `encoder.distribution`, `bit_compression` (**deprecated** Dep019, accepted and ignored) | — | `encoder` is **always** emitted, possibly as `{}`. **Python bug:** pydantic dumps the field as `encoder.type_` instead of `type`, so the encoder type is silently ignored on create. Python's integration test comments this as a "potential weaviate bug". PHP **must emit `type`** |
+| `pq()` | `centroids`, `segments`, `training_limit`→`trainingLimit`, `encoder_type: ?PQEncoderType` → `encoder.type`, `encoder_distribution: ?PQEncoderDistribution` → `encoder.distribution`, `bit_compression` (**deprecated** Dep019; **not accepted** in PHP, see §14) | — | `encoder` is **always** emitted, possibly as `{}`. **Python bug:** pydantic dumps the field as `encoder.type_` instead of `type`, so the encoder type is silently ignored on create. Python's integration test comments this as a "potential weaviate bug". PHP **must emit `type`** |
 | `bq()` | `cache`, `rescore_limit`→`rescoreLimit` | — | |
-| `sq()` | `rescore_limit`, `training_limit`; `cache` (**deprecated**, ignored) | 1.26 | |
+| `sq()` | `rescore_limit`, `training_limit`; `cache` (**deprecated**; **not accepted** in PHP, see §14) | 1.26 | |
 | `rq()` | `bits`, `rescore_limit`, `training_limit`, `centering`, `cache` | hnsw 1.32; flat 1.34; 1-bit 1.34; `centering` 1.39.2 | |
 | `none()` | — | 1.32.4 (the changelog says 1.33) | Serializes as `"skipDefaultQuantization": true`. It opts out of a server-default quantizer |
 
@@ -390,7 +390,7 @@ Params use Python name → wire key. The PHP name is the camelCase form. `*` mea
 | `anyscale` → `anyscale` | `generative-anyscale` | `model`, `temperature`, `base_url` |
 | `aws_bedrock` → `awsBedrock` | `generative-aws` | `model`*, `region`*, `temperature`, `max_tokens`, `top_k`, `top_p`, `stop_sequences`; fixed `service: "bedrock"` |
 | `aws_sagemaker` → `awsSagemaker` | `generative-aws` | `region`*, `endpoint`*, `max_tokens`, `target_model`→`targetModel`, `target_variant`→`targetVariant`, `temperature`, `top_k`, `top_p`, `stop_sequences`; fixed `service: "sagemaker"` |
-| `aws` → `aws` (**deprecated**) | `generative-aws` | `model`, `region`=`''`, `endpoint`, `service`=`'bedrock'`, `max_tokens` |
+| `aws` (**deprecated**; **not ported**, §14) | `generative-aws` | `model`, `region`=`''`, `endpoint`, `service`=`'bedrock'`, `max_tokens` |
 | `azure_openai` → `azureOpenAI` | `generative-openai` | `resource_name`*→`resourceName`, `deployment_id`*→`deploymentId`, `api_version`→`apiVersion`, `base_url`, `frequency_penalty`→`frequencyPenalty`, `presence_penalty`→`presencePenalty`, `max_tokens`, `temperature`, `top_p` |
 | `cohere` → `cohere` | `generative-cohere` | `model`, `k`, `max_tokens`, `stop_sequences`, `temperature`, `base_url`; `return_likelihoods` is **accepted and ignored** |
 | `contextualai` → `contextualAI` | `generative-contextualai` | `model`, `temperature`, `top_p`, `max_new_tokens`→`maxNewTokens`, `system_prompt`→`systemPrompt`, `avoid_commentary`→`avoidCommentary`, `knowledge` (list) |
@@ -401,7 +401,7 @@ Params use Python name → wire key. The PHP name is the camelCase form. `*` mea
 | `friendliai` → `friendliAI` | `generative-friendliai` | `base_url`, `model`, `temperature`, `max_tokens` |
 | `google_vertex` → `googleVertex` | `generative-palm` | `project_id`*→`projectId`, `api_endpoint`, `region`, `location`, `max_output_tokens`→`maxOutputTokens`, `model_id`→`modelId`, `endpoint_id`→`endpointId`, `temperature`, `top_k`, `top_p` |
 | `google_gemini` → `googleGemini` | `generative-palm` | `max_output_tokens`, `model`→`modelId`, `temperature`, `top_k`, `top_p`; **emits `projectId: ""`** (port as is) |
-| `google` / `palm` → (**deprecated**) | `generative-palm` | `project_id`*, `api_endpoint`, `max_output_tokens`, `model_id`, `temperature`, `top_k`, `top_p` |
+| `google` / `palm` (**deprecated**; **not ported**, §14) | `generative-palm` | `project_id`*, `api_endpoint`, `max_output_tokens`, `model_id`, `temperature`, `top_k`, `top_p` |
 | `meta` → `meta` | `generative-meta` | `base_url`, `model`, `temperature`, `top_p`, `max_tokens`, `frequency_penalty`, `presence_penalty`, `reasoning_effort` (`none\|minimal\|low\|medium\|high\|xhigh`) |
 | `mistral` → `mistral` | `generative-mistral` | `model`, `temperature`, `max_tokens`, `base_url` |
 | `nvidia` → `nvidia` | `generative-nvidia` | `base_url`, `model`, `temperature`, `max_tokens`, `top_p` |
@@ -764,7 +764,7 @@ Every ported deprecated item gets a PHP `@deprecated` docblock (PHPStan and IDE 
 
 ### 15.1 One data table, generated code
 
-About 38 vectorizer factories, about 20 generative factories and 7 reranker factories are all "a name, a wire module, a list of `(phpParam, type, default, required, wireKey, transform)`". Hand-writing them means around 3,000 lines of code that drift over time.
+39 vectorizer factories (33 ported; 6 deprecated ones aren't), 4 multi-vector factories, 22 generative factories in v4.23.1 plus 🆕 `meta` on main (3 deprecated ones aren't ported), and 7 reranker factories (counts from the 2026-09-25 AST audit) are all "a name, a wire module, a list of `(phpParam, type, default, required, wireKey, transform)`". Hand-writing them means around 3,000 lines of code that drift over time.
 
 - **Source of truth:** `resources/modules/{vectors,multi_vectors,generative,reranker}.php`. These are plain PHP arrays, so no YAML parser is needed at build time. Example:
   ```php

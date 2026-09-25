@@ -22,6 +22,10 @@ use Weaviate\Client\Exceptions\GrpcException;
  *   with "Error in the HTTP2 framing layer"; 8.4.0+ verified working). On those versions every call opens a
  *   fresh connection instead: correct, but slower.
  *
+ * - Errors match ExtGrpcTransport: network failures are UNAVAILABLE, size limits RESOURCE_EXHAUSTED, deadlines
+ *   DEADLINE_EXCEEDED, and UNAUTHENTICATED / PERMISSION_DENIED map to the auth exceptions (GrpcErrors).
+ * - Proxies: `$proxy` if given; otherwise HTTP(S)_PROXY from the environment only when `$trustEnv` is true.
+ *
  * See ADR 0002.
  *
  * @internal
@@ -47,9 +51,11 @@ final class CurlGrpcTransport implements GrpcTransport
         private readonly ProtocolParams $endpoint,
         private int $maxMessageLength = self::DEFAULT_MAX_MESSAGE_LENGTH,
         private readonly float $connectTimeout = 2.0,
+        #[\SensitiveParameter]
         private readonly ?string $proxy = null,
         private readonly ?string $userAgent = null,
         ?bool $reuseConnections = null,
+        private readonly bool $trustEnv = false,
     ) {
         if (!self::isSupported()) {
             throw new ConnectionException(
@@ -90,15 +96,25 @@ final class CurlGrpcTransport implements GrpcTransport
 
     public function setMaxMessageLength(int $maxMessageLength): void
     {
-        $this->maxMessageLength = $maxMessageLength;
+        if ($maxMessageLength > 0) {
+            $this->maxMessageLength = $maxMessageLength;
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        return ['endpoint' => $this->endpoint->url(), 'reuseConnections' => $this->reuseConnections, 'proxy' => $this->proxy === null ? null : '***'];
     }
 
     public function unary(string $method, Message $request, string $responseClass, float $timeout, array $metadata = []): Message
     {
         $payload = $request->serializeToString();
         if (\strlen($payload) > $this->maxMessageLength) {
-            throw new ConnectionException(\sprintf(
-                'gRPC request of %d bytes exceeds the maximum of %d bytes',
+            throw new GrpcException($method, GrpcStatus::ResourceExhausted, \sprintf(
+                'request of %d bytes exceeds the maximum of %d bytes',
                 \strlen($payload),
                 $this->maxMessageLength,
             ));
@@ -112,11 +128,16 @@ final class CurlGrpcTransport implements GrpcTransport
             'expect:',
         ];
         foreach ($metadata as $key => $value) {
-            $headers[] = strtolower($key) . ': ' . $value;
+            $key = strtolower($key);
+            // Binary metadata travels base64-encoded (gRPC spec); ext-grpc does this itself.
+            $headers[] = $key . ': ' . (str_ends_with($key, '-bin') ? base64_encode($value) : $value);
         }
 
-        /** @var array<string, string> $received */
+        /** @var array<string, list<string>> $received */
         $received = [];
+        $body = '';
+        $limit = $this->maxMessageLength + 5; // one frame: 5-byte prefix + message
+        $tooLarge = false;
         if (!$this->reuseConnections) {
             $this->handle = null;
         }
@@ -128,7 +149,17 @@ final class CurlGrpcTransport implements GrpcTransport
             \CURLOPT_POSTFIELDS => Framing::encode($payload),
             \CURLOPT_HTTPHEADER => $headers,
             \CURLOPT_HTTP_VERSION => \CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE,
-            \CURLOPT_RETURNTRANSFER => true,
+            // Stream the body so an oversized response is aborted instead of buffered in full.
+            \CURLOPT_WRITEFUNCTION => static function ($ch, string $chunk) use (&$body, &$tooLarge, $limit): int {
+                if (\strlen($body) + \strlen($chunk) > $limit) {
+                    $tooLarge = true;
+
+                    return 0;
+                }
+                $body .= $chunk;
+
+                return \strlen($chunk);
+            },
             \CURLOPT_TIMEOUT_MS => max(1, (int) ceil($timeout * 1000)),
             // Without reuse every call pays a (TLS) handshake, which can stall for seconds over the internet
             // (measured p95 2.5 s against Weaviate Cloud), so the call's own deadline bounds the connect too.
@@ -137,7 +168,7 @@ final class CurlGrpcTransport implements GrpcTransport
             \CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$received): int {
                 $colon = strpos($line, ':');
                 if ($colon !== false) {
-                    $received[strtolower(trim(substr($line, 0, $colon)))] = trim(substr($line, $colon + 1));
+                    $received[strtolower(trim(substr($line, 0, $colon)))][] = trim(substr($line, $colon + 1));
                 }
 
                 return \strlen($line);
@@ -153,42 +184,56 @@ final class CurlGrpcTransport implements GrpcTransport
         if ($this->proxy !== null) {
             $options[\CURLOPT_PROXY] = $this->proxy;
             $options[\CURLOPT_HTTPPROXYTUNNEL] = true;
+        } elseif (!$this->trustEnv) {
+            // An empty proxy disables libcurl's own HTTP(S)_PROXY / ALL_PROXY lookup.
+            $options[\CURLOPT_PROXY] = '';
         }
         // PHPStan's curl_setopt_array shape doesn't know CURLOPT_HEADERFUNCTION closures or the proxy options.
         curl_setopt_array($handle, $options); // @phpstan-ignore argument.type
 
-        $body = curl_exec($handle);
+        $ok = curl_exec($handle);
         $errno = curl_errno($handle);
 
+        if ($tooLarge) {
+            throw new GrpcException($method, GrpcStatus::ResourceExhausted, \sprintf('response exceeds the maximum of %d bytes', $this->maxMessageLength));
+        }
         if ($errno === \CURLE_OPERATION_TIMEDOUT) {
-            throw new GrpcException($method, GrpcStatus::DeadlineExceeded, curl_error($handle));
+            // A timeout before the connection was established is a reachability problem, not a slow call.
+            $connected = (float) curl_getinfo($handle, \CURLINFO_CONNECT_TIME) > 0.0;
+
+            throw $connected
+                ? new GrpcException($method, GrpcStatus::DeadlineExceeded, curl_error($handle))
+                : new GrpcException($method, GrpcStatus::Unavailable, \sprintf('connecting to %s timed out', $this->endpoint->url()));
         }
-        if ($body === false || $errno !== 0) {
-            throw new ConnectionException(\sprintf('gRPC %s to %s failed: %s', $method, $this->baseUrl(), curl_error($handle)));
+        if ($ok === false || $errno !== 0) {
+            $hint = \in_array($errno, [16 /* HTTP2 */, 52 /* GOT_NOTHING */, 56 /* RECV_ERROR */], true)
+                ? ' (is this the gRPC port? It must speak HTTP/2)'
+                : '';
+
+            throw new GrpcException($method, GrpcStatus::Unavailable, \sprintf('%s: %s%s', $this->endpoint->url(), curl_error($handle), $hint));
         }
-        \assert(\is_string($body));
 
         $httpVersion = curl_getinfo($handle, \CURLINFO_HTTP_VERSION);
         if ($httpVersion !== \CURL_HTTP_VERSION_2_0) {
-            throw new ConnectionException(\sprintf(
-                'gRPC %s: the server at %s did not speak HTTP/2 (is the gRPC port right?)',
-                $method,
-                $this->baseUrl(),
+            throw new GrpcException($method, GrpcStatus::Unavailable, \sprintf(
+                'the server at %s did not speak HTTP/2 (is the gRPC port right?)',
+                $this->endpoint->url(),
             ));
         }
 
         $httpStatus = (int) curl_getinfo($handle, \CURLINFO_RESPONSE_CODE);
-        if ($httpStatus !== 200) {
-            throw new GrpcException($method, GrpcStatus::fromHttpStatus($httpStatus), \sprintf('HTTP status %d', $httpStatus));
+        $grpcStatus = $received['grpc-status'][0] ?? null;
+        if ($httpStatus !== 200 && $grpcStatus === null) {
+            throw GrpcErrors::fromStatus($method, GrpcStatus::fromHttpStatus($httpStatus), \sprintf('HTTP status %d', $httpStatus));
         }
 
         // grpc-status is in the trailers, or in the headers of a trailers-only response.
-        if (!isset($received['grpc-status'])) {
+        if ($grpcStatus === null) {
             throw new GrpcException($method, GrpcStatus::Internal, 'response has no grpc-status');
         }
-        $status = GrpcStatus::fromCode((int) $received['grpc-status']);
+        $status = GrpcStatus::fromCode((int) $grpcStatus);
         if ($status !== GrpcStatus::Ok) {
-            throw new GrpcException($method, $status, rawurldecode($received['grpc-message'] ?? ''));
+            throw GrpcErrors::fromStatus($method, $status, rawurldecode(implode(', ', $received['grpc-message'] ?? [])));
         }
 
         $messages = Framing::decode($body, $this->maxMessageLength);
@@ -233,6 +278,6 @@ final class CurlGrpcTransport implements GrpcTransport
 
     private function baseUrl(): string
     {
-        return \sprintf('%s://%s:%d', $this->endpoint->secure ? 'https' : 'http', $this->endpoint->host, $this->endpoint->port);
+        return $this->endpoint->url();
     }
 }

@@ -145,21 +145,46 @@ interface GrpcTransport
 
 ## Errors
 
+✅ = implemented in P0; the rest are specified in 09–15 and land with their features. Python equivalents are in brackets.
+
 ```
 WeaviateException (base, extends \RuntimeException)
-├── ConnectionException              network errors, TLS, missing HTTP/2
-├── AuthenticationException          401 / OIDC failures
-├── ForbiddenException               403 (RBAC)
-├── NotFoundException                404 where it's meaningful (get by id returns null instead)
-├── UnexpectedStatusCodeException    other REST errors; carries status + decoded body
-├── GrpcException                    carries gRPC status code + message
-│   └── QueryException               Search / Aggregate failures
-├── InsertManyException              whole-request insert_many failure (per-object errors live on the result)
-├── BatchException
-├── BackupException / BackupFailedException
-├── UnsupportedFeatureException      server version too old
-└── InvalidInputException            client-side validation (thrown before any I/O)
+├── ConnectionException ✅                 network/TLS failures, missing HTTP/2          [WeaviateConnectionError]
+│   ├── ClientClosedException ✅           call on a closed / never-connected client     [WeaviateClosedClientError]
+│   └── WeaviateGrpcUnavailableException   gRPC endpoint unreachable at startup          [WeaviateGRPCUnavailableError]
+├── WeaviateStartUpException ✅            connect() failed: unreachable, < 1.29, health  [WeaviateStartUpError]
+├── AuthenticationException ✅             401 / gRPC UNAUTHENTICATED / OIDC failures     [AuthenticationFailedError]
+│   └── MissingScopeException              client_credentials without scope (non-Azure)   [MissingScopeError]
+├── UnexpectedStatusCodeException ✅       other REST errors; status + decoded body       [UnexpectedStatusCodeError]
+│   ├── InsufficientPermissionsException ✅ 403 and gRPC PERMISSION_DENIED (status 403)   [InsufficientPermissionsError]
+│   ├── UsageLimitException ✅             429, with errorCode() (e.g. USAGE_LIMIT_EXCEEDED)
+│   ├── ResponseCannotBeDecodedException   2xx with an undecodable body                  [ResponseCannotBeDecodedError]
+│   └── EmptyResponseException             2xx with an empty body where one is required  [EmptyResponseError]
+├── GrpcException ✅                       non-OK gRPC status: status + message
+│   └── QueryException                     Search / Aggregate failures                    [WeaviateQueryError]
+├── TimeoutException                       client-side waits (backups, exports, indexing) [WeaviateTimeoutError]
+├── RetryException                         retries exhausted                              [WeaviateRetryError]
+├── InsertManyException / InsertManyAllFailedException, DeleteManyException, TenantsGetException (spec 11)
+├── BatchException, BatchValidationException, BatchStream* (spec 14)
+├── BackupException / BackupFailedException / BackupCanceledException, Export* (spec 15)
+├── SchemaValidationException              config JSON the client can't parse (spec 10)
+├── UnsupportedFeatureException ✅         server version too old                         [WeaviateUnsupportedFeatureError]
+└── InvalidInputException ✅               client-side validation, before any I/O         [WeaviateInvalidInputError]
 ```
+
+Rules:
+- **Every transport raises the same exception** for the same failure, verified by `TransportParityTest`:
+  - UNAVAILABLE for network or TLS failures;
+  - DEADLINE_EXCEEDED;
+  - RESOURCE_EXHAUSTED for size limits, on either side;
+  - UNAUTHENTICATED becomes `AuthenticationException`;
+  - PERMISSION_DENIED becomes `InsufficientPermissionsException`.
+- **Weaviate quirk:** a bad or missing API key comes back over gRPC as `UNKNOWN` with "extract auth: unauthorized". That's mapped to `AuthenticationException` too.
+- **No secrets in exceptions:**
+  - PSR-18 exceptions (which carry the request, including `Authorization`) are never chained.
+  - Credential parameters are `#[\SensitiveParameter]`.
+  - `__debugInfo` redacts headers, and `ApiKey` doesn't store the key in a property at all.
+- **One timeout name:** `TimeoutException`, used by specs 11, 14 and 15.
 
 ## Cross-cutting concerns
 

@@ -239,9 +239,9 @@ REST TLS (a custom CA or client cert for HTTPS) is set on the PSR-18 client. Whe
 
 See [spike 0001](spikes/0001-grpc-transport.md), findings 6–7.
 
-## 6. gRPC-web (server 1.38.3 and later)
+## 6. gRPC-web (server 1.38.3 and later) 🆕 unreleased in Python
 
-Python recently added `grpc_path_prefix`. Weaviate 1.38.3 and later serves **grpc-web on the REST endpoint** at `/v1/grpc-web`. In Python this is only used for WebAssembly/Pyodide, through async and a shim.
+Python added `grpc_path_prefix` on `main` after v4.23.1, so it's **not in a Python release yet**. Python allows it **only on async clients under Pyodide** (`_check_grpc_web_usable` raises `WeaviateInvalidInputError` otherwise). PHP allowing it on the sync client is a deliberate deviation. The prefix is normalised to one leading `/`, no trailing `/`, and `""` becomes null. When the health check fails with UNIMPLEMENTED and HTTP 404 or 405 in the message, the error should say "wrong path, or server older than 1.38.3", as Python's `WeaviateGRPCUnavailableError` does. Weaviate 1.38.3 and later serves **grpc-web on the REST endpoint** at `/v1/grpc-web`. In Python this is only used for WebAssembly/Pyodide, through async and a shim.
 
 **This matters more for PHP than for Python.** grpc-web runs over **HTTP/1.1 on the REST host and port**. That means:
 - no HTTP/2 or nghttp2 requirement,
@@ -261,7 +261,8 @@ See [ADR 0002](decisions/0002-pluggable-grpc-transport.md).
 This follows Python `ConnectionSync.connect()`:
 
 1. If the client is already connected and `force` is false, return.
-2. **Open REST.** If auth is OIDC, run discovery (`/v1/.well-known/openid-configuration`, `init` timeout) and get the first token.
+2. **Open REST, then run OIDC discovery** (`/v1/.well-known/openid-configuration`, `init` timeout). Python skips discovery only when one of these holds: the auth is an API key, the headers already contain `Authorization`, or `skipInitChecks` is set **and** there is no auth. So discovery also runs **with no credentials**. If the server has OIDC enabled in that case, it fails with `AuthenticationException` ("No login credentials provided"). When the discovery request itself fails, that's a `ConnectionException`, not a startup exception. (Verified against the Python source by the 2026-09-25 parity audit.)
+   - OIDC token refresh follows Python `main`: the first refresh happens at `expires_in - 30`, and any failure logs a warning and retries after 1 s. v4.23.1 refreshed at `expires_in` and retried only HTTP errors.
 3. **`GET /v1/meta`** (always, **even with `skipInitChecks`**). This reads the server `version` and `grpcMaxMessageSize`. Connection, TLS or read errors become `WeaviateStartUpException("Could not connect to Weaviate: …")`.
 4. **Open gRPC:** build the transport with the effective message size, TLS and proxy settings.
 5. **Version floor.** If the server is older than **1.29.0**, throw `WeaviateStartUpException` ("Weaviate version X is not supported. Please use 1.29.0 or higher"). This is a hard failure, as in Python, but with a higher floor (Python's is 1.27.0); see [ADR 0004](decisions/0004-server-version-floor.md).
@@ -272,6 +273,12 @@ This follows Python `ConnectionSync.connect()`:
 
 Other lifecycle methods:
 - `isReady()` calls `GET /v1/.well-known/ready`.
+- **Implemented behaviour (P0):**
+  - A failed `connect(force: true)` leaves the client disconnected; the new transports are swapped in only after every check passes.
+  - Calls on a closed client throw `ClientClosedException`.
+  - A `/v1/meta` without a `version` fails with "Is this a Weaviate server?".
+  - REST calls use the `init` / `query` / `insert` timeouts per request.
+  - Proxy environment variables are ignored unless `trustEnv` is set.
 - `isLive()` calls `GET /v1/.well-known/live` **and then** the gRPC health check. It returns `true` only when both pass, as Python does. `isReady()` and `isLive()` return `false` on connection errors instead of throwing.
 - `isConnected()` returns the connection state.
 - `close()` releases the curl and gRPC handles.

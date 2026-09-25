@@ -6,7 +6,6 @@ namespace Weaviate\Client\Connect;
 
 use Weaviate\Client\Connect\Auth\ApiKey;
 use Weaviate\Client\Connect\Auth\AuthCredentials;
-use Weaviate\Client\Exceptions\InvalidInputException;
 
 /**
  * Credential factories. Python `Auth`; see docs/09-connection.md §3.
@@ -17,7 +16,7 @@ final class Auth
 {
     private function __construct() {}
 
-    public static function apiKey(string $apiKey): ApiKey
+    public static function apiKey(#[\SensitiveParameter] string $apiKey): ApiKey
     {
         return new ApiKey($apiKey);
     }
@@ -25,13 +24,9 @@ final class Auth
     /**
      * Python `__parse_auth_credentials`: a plain string is treated as an API key.
      */
-    public static function parse(string|AuthCredentials|null $credentials): ?AuthCredentials
+    public static function parse(#[\SensitiveParameter] string|AuthCredentials|null $credentials): ?AuthCredentials
     {
         if (\is_string($credentials)) {
-            if ($credentials === '') {
-                throw new InvalidInputException('API key must not be empty');
-            }
-
             return self::apiKey($credentials);
         }
 

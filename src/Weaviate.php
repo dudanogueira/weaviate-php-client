@@ -27,9 +27,11 @@ final class Weaviate
         string $host = 'localhost',
         int $port = 8080,
         int $grpcPort = 50051,
+        #[\SensitiveParameter]
         array $headers = [],
         ?AdditionalConfig $additionalConfig = null,
         bool $skipInitChecks = false,
+        #[\SensitiveParameter]
         string|AuthCredentials|null $auth = null,
     ): WeaviateClient {
         return self::connect(new WeaviateClient(
@@ -48,7 +50,9 @@ final class Weaviate
      */
     public static function connectToWeaviateCloud(
         string $clusterUrl,
+        #[\SensitiveParameter]
         string|AuthCredentials $auth,
+        #[\SensitiveParameter]
         array $headers = [],
         ?AdditionalConfig $additionalConfig = null,
         bool $skipInitChecks = false,
@@ -76,8 +80,10 @@ final class Weaviate
         string $grpcHost,
         int $grpcPort,
         bool $grpcSecure,
+        #[\SensitiveParameter]
         array $headers = [],
         ?AdditionalConfig $additionalConfig = null,
+        #[\SensitiveParameter]
         string|AuthCredentials|null $auth = null,
         bool $skipInitChecks = false,
         ?string $grpcPathPrefix = null,
@@ -100,13 +106,33 @@ final class Weaviate
      */
     public static function parseCloudUrl(string $clusterUrl): array
     {
-        $host = $clusterUrl;
-        if (str_starts_with($clusterUrl, 'http')) {
-            $host = (string) parse_url($clusterUrl, \PHP_URL_HOST);
+        $input = trim($clusterUrl);
+        if (preg_match('#^https?://#i', $input) === 1) {
+            // A pasted URL: keep only the host, but refuse anything that would be silently dropped.
+            $parts = parse_url($input);
+            if ($parts === false || !isset($parts['host'])) {
+                throw new InvalidInputException(\sprintf('Invalid cluster URL: %s', $clusterUrl));
+            }
+            if (isset($parts['port']) || trim($parts['path'] ?? '', '/') !== '' || isset($parts['query'])) {
+                throw new InvalidInputException(\sprintf(
+                    'Pass the cluster URL without port, path or query (e.g. "abc123.c0.europe-west3.gcp.weaviate.cloud"), got "%s"',
+                    $clusterUrl,
+                ));
+            }
+            $host = $parts['host'];
+        } else {
+            $host = rtrim($input, '/');
         }
-        $host = rtrim($host, '/');
-        if ($host === '') {
+        $host = strtolower($host);
+        if ($host === '' || preg_match('/^[a-z0-9.-]+$/', $host) !== 1) {
             throw new InvalidInputException(\sprintf('Invalid cluster URL: %s', $clusterUrl));
+        }
+        if (str_starts_with($host, 'grpc-')) {
+            throw new InvalidInputException(\sprintf(
+                'Pass the REST cluster URL, not the gRPC host: use "%s" instead of "%s"',
+                substr($host, 5),
+                $host,
+            ));
         }
 
         if (str_ends_with($host, '.weaviate.network')) {

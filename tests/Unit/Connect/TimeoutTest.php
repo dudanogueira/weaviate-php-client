@@ -29,4 +29,16 @@ final class TimeoutTest extends TestCase
         $this->expectException(InvalidInputException::class);
         new Timeout(query: -1);
     }
+
+    public function testZeroIsRejectedBecauseTransportsDisagreeOnItsMeaning(): void
+    {
+        $this->expectException(InvalidInputException::class);
+        new Timeout(init: 0);
+    }
+
+    public function testArrayMustBeAQueryInsertPair(): void
+    {
+        $this->expectException(InvalidInputException::class);
+        Timeout::from(['query' => 1, 'insert' => 2]);
+    }
 }

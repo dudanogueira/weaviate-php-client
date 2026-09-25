@@ -40,6 +40,12 @@ Each spec maps every public Python v4 method and parameter to its PHP equivalent
 |---|---|---|
 | [0001](spikes/0001-grpc-transport.md) | Pure-PHP gRPC transport (ADR 0002) | GO: curl matches or beats ext-grpc (local and Weaviate Cloud) with libcurl 8.4 or later |
 
+## QA reviews
+
+| Date | Review | Result |
+|---|---|---|
+| 2026-09-25 | [P0 connection layer + Python parity](qa/2026-09-25-p0-review.md) | 16 findings fixed (2 P1). Tests went from 45 to 124. The collections parity audit found no gaps; the client scope got 6 additions |
+
 ## Decision records
 
 | ADR | Decision | Status |

@@ -20,8 +20,7 @@ final readonly class ConnectionParams
         public ProtocolParams $grpc,
         public ?string $grpcPathPrefix = null,
     ) {
-        $sameEndpoint = $http->host === $grpc->host && $http->port === $grpc->port;
-        if ($sameEndpoint && $this->grpcWebPathPrefix() === '') {
+        if ($http->sameEndpointAs($grpc) && $this->grpcWebPathPrefix() === '') {
             throw new InvalidInputException('http port and grpc port must be different if using the same host');
         }
     }
@@ -48,8 +47,11 @@ final readonly class ConnectionParams
      */
     public static function fromUrl(string $url, int $grpcPort, bool $grpcSecure = false, ?string $grpcPathPrefix = null): self
     {
-        $parts = parse_url($url);
-        $scheme = $parts['scheme'] ?? '';
+        $parts = parse_url(trim($url));
+        if ($parts === false) {
+            throw new InvalidInputException(\sprintf('Invalid URL: %s', $url));
+        }
+        $scheme = strtolower($parts['scheme'] ?? '');
         if ($scheme !== 'http' && $scheme !== 'https') {
             throw new InvalidInputException(\sprintf('Unsupported scheme: %s', $scheme));
         }
@@ -75,11 +77,11 @@ final readonly class ConnectionParams
 
     public function httpUrl(): string
     {
-        return \sprintf('%s://%s:%d', $this->http->secure ? 'https' : 'http', $this->http->host, $this->http->port);
+        return $this->http->url();
     }
 
     public function grpcUrl(): string
     {
-        return \sprintf('%s://%s:%d', $this->grpc->secure ? 'https' : 'http', $this->grpc->host, $this->grpc->port);
+        return $this->grpc->url();
     }
 }

@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Weaviate\Client\Transport\Grpc;
 
 use Google\Protobuf\Internal\Message;
-use Weaviate\Client\Exceptions\ConnectionException;
+use Weaviate\Client\Exceptions\AuthenticationException;
 use Weaviate\Client\Exceptions\GrpcException;
+use Weaviate\Client\Exceptions\InsufficientPermissionsException;
 
 /**
  * A gRPC channel to Weaviate. See docs/01-architecture.md "Transports" and ADR 0002.
@@ -27,8 +28,10 @@ interface GrpcTransport
      *
      * @return T
      *
-     * @throws GrpcException       on a non-OK gRPC status (including DEADLINE_EXCEEDED)
-     * @throws ConnectionException on network, TLS or protocol failures
+     * @throws GrpcException                    on a non-OK status: UNAVAILABLE for network/TLS failures,
+     *                                          DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED for size limits, …
+     * @throws AuthenticationException          on UNAUTHENTICATED
+     * @throws InsufficientPermissionsException on PERMISSION_DENIED
      */
     public function unary(string $method, Message $request, string $responseClass, float $timeout, array $metadata = []): Message;
 

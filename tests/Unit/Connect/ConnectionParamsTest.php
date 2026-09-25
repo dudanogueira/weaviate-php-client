@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weaviate\Client\Tests\Unit\Connect;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Weaviate\Client\Connect\ConnectionParams;
 use Weaviate\Client\Connect\ProtocolParams;
@@ -49,6 +50,45 @@ final class ConnectionParamsTest extends TestCase
     {
         $this->expectException(InvalidInputException::class);
         ConnectionParams::fromUrl('grpc://localhost', 50051);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function invalidHosts(): iterable
+    {
+        yield 'path' => ['a/b'];
+        yield 'space' => ['a b'];
+        yield 'scheme' => ['http://localhost'];
+        yield 'port' => ['localhost:8080'];
+        yield 'userinfo' => ['user@localhost'];
+        yield 'bad ipv6' => ['::zz'];
+    }
+
+    #[DataProvider('invalidHosts')]
+    public function testInvalidHostsAreRejected(string $host): void
+    {
+        $this->expectException(InvalidInputException::class);
+        new ProtocolParams($host, 8080, false);
+    }
+
+    public function testIpv6HostsAreBracketedInUrls(): void
+    {
+        self::assertSame('http://[::1]:8080', (new ProtocolParams('::1', 8080, false))->url());
+        self::assertSame('https://[2001:db8::1]:443', (new ProtocolParams('[2001:db8::1]', 443, true))->url());
+        self::assertSame('http://[::1]:8080', ConnectionParams::fromUrl('http://[::1]:8080', 50051)->httpUrl());
+    }
+
+    public function testHostComparisonIsCaseInsensitive(): void
+    {
+        $this->expectException(InvalidInputException::class);
+        ConnectionParams::fromParams('LocalHost', 8080, false, 'localhost', 8080, false);
+    }
+
+    public function testFromUrlAcceptsAnUppercaseScheme(): void
+    {
+        self::assertTrue(ConnectionParams::fromUrl('HTTPS://VDB.example.com', 50051)->http->secure);
+        self::assertSame('vdb.example.com', ConnectionParams::fromUrl('HTTPS://VDB.example.com', 50051)->http->host);
     }
 
     public function testProtocolParamsValidation(): void

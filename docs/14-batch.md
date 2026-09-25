@@ -386,7 +386,7 @@ These go into the [01](01-architecture.md#errors) tree under `BatchException`.
 - If `$shards` is null, use the imported shards of the **last** batch. Otherwise it must be a `list<Shard>`; anything else throws `InvalidInputException` (Python raises `TypeError`).
 - Poll every 0.25 s. For each shard, call `GET /v1/schema/{Collection}/shards` with `?tenant={t}` when a tenant is set. A shard is ready when `status == "READY"`, or, when `per_node_status` is present, when every node's status is `READY`.
 - On an HTTP or network error, retry with `2^n` s backoff up to `$howManyFailures` times, then rethrow.
-- There's no overall timeout, as in Python. PHP adds an optional `?float $timeout = null` that throws `WeaviateTimeoutException`.
+- There's no overall timeout, as in Python. PHP adds an optional `?float $timeout = null` that throws `TimeoutException`.
 
 ## 8. Wire mapping (client-side modes)
 

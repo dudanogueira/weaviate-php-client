@@ -6,6 +6,8 @@ This is the source of truth for scope and progress. Update the **Status** column
 - **Phase:** see [04: Roadmap](04-roadmap.md).
 - **Min server:** the lowest Weaviate version where the feature exists. `—` means it works on the whole supported range (**1.29 and later**, see [ADR 0004](decisions/0004-server-version-floor.md)).
 - **Status:** ⬜ not started · 🟨 in progress · ✅ done · ⏸ deferred.
+- 🆕 **Unreleased in Python**: the feature exists on Python `main` (4.24.0 dev) but not in the latest release, **v4.23.1**. It may still change before it ships.
+- Parity audit: 2026-09-25, against v4.23.1 and `main` (AST enumeration of every public API). Collections scope: no missing APIs; client scope: see the rows marked "audit".
 
 Python names come from client 4.24.0 (`main` at `eb5546a`, read 2026-09-25). Each section links to a detailed spec (09–15), which was written from the Python **source**. Rows marked † are still unverified, and each spec lists its own unverified items in its final section.
 
@@ -26,9 +28,9 @@ Full parameter-level spec: **[09: Connection](09-connection.md)**. Verified agai
 | `connect_to_local(host="localhost", port=8080, grpc_port=50051, headers, additional_config, skip_init_checks, auth_credentials)` | `Weaviate::connectToLocal(host:, port:, grpcPort:, headers:, additionalConfig:, skipInitChecks:, auth:)`. Always plaintext; same host for both | — | P0 | — | ✅ |
 | `connect_to_weaviate_cloud(cluster_url, auth_credentials, headers, additional_config, skip_init_checks)` | `Weaviate::connectToWeaviateCloud(clusterUrl:, auth:, headers:, additionalConfig:, skipInitChecks:)`. Derives the gRPC host (`grpc-{host}` / `.grpc.` for `*.weaviate.network`); 443 + TLS for both; warns about OIDC | — | P0 | — | 🟨 |
 | `connect_to_custom(http_host, http_port, http_secure, grpc_host, grpc_port, grpc_secure, headers, additional_config, auth_credentials, skip_init_checks)` | `Weaviate::connectToCustom(...)`, the same 10 parameters plus `grpcPathPrefix:`. **Separate host, port and TLS for each protocol** | — | P0 | — | 🟨 |
-| `WeaviateClient(connection_params, auth_client_secret, additional_headers, additional_config, skip_init_checks)` + `connect(force)` | `new WeaviateClient(connectionParams:, auth:, headers:, additionalConfig:, skipInitChecks:)` + `connect(force:)` | — | P0 | — | ✅ |
-| `ConnectionParams(http=ProtocolParams(host, port, secure), grpc=ProtocolParams(...), grpc_path_prefix)`, `.from_params(...)`, `.from_url(url, grpc_port, grpc_secure)` | `ConnectionParams`, `ProtocolParams`, `::fromParams()`, `::fromUrl()`. Validates that the same host:port isn't used for both | — | P0 | — | ⬜ |
-| `grpc_path_prefix` (grpc-web on the REST endpoint) | `grpcPathPrefix:` + `GrpcWebTransport` (HTTP/1.1, no nghttp2 needed; also an automatic fallback) | gRPC-web | P0 | 1.38.3 | ⬜ |
+| `WeaviateClient(connection_params, auth_client_secret, additional_headers, additional_config, skip_init_checks)` + `connect()` | `new WeaviateClient(connectionParams:, auth:, headers:, additionalConfig:, skipInitChecks:)` + `connect()`, plus `connect(force: true)` (a **PHP addition**; Python's public `connect()` takes no arguments). A failed forced reconnect leaves the client disconnected | — | P0 | — | ✅ |
+| `ConnectionParams(http=ProtocolParams(host, port, secure), grpc=ProtocolParams(...), grpc_path_prefix 🆕)`, `.from_params(...)`, `.from_url(url, grpc_port, grpc_secure)` | `ConnectionParams`, `ProtocolParams`, `::fromParams()`, `::fromUrl()`. Validates that the same host:port isn't used for both | — | P0 | — | ⬜ |
+| 🆕 `grpc_path_prefix` (grpc-web on the REST endpoint; Python allows it only on async clients under Pyodide, so PHP allowing it on the sync client is a deliberate deviation) | `grpcPathPrefix:` + `GrpcWebTransport` (HTTP/1.1, no nghttp2 needed; also an automatic fallback) | gRPC-web | P0 | 1.38.3 | ⬜ |
 | `connect_to_embedded(hostname, port=8079, grpc_port=50050, version, persistence_data_path, binary_path, environment_variables, …)` | ⏸ Not planned (managing a subprocess from PHP). Use Docker or testcontainers | — | — | — | ⏸ |
 | `connect_to_wcs` (deprecated alias) | Not ported | — | — | — | ⏸ |
 | `Auth.api_key(api_key)`; a plain `str` is also treated as an API key | `Auth::apiKey()`; a plain `string` works too | both | P0 | — | ✅ |
@@ -48,7 +50,13 @@ Full parameter-level spec: **[09: Connection](09-connection.md)**. Verified agai
 | gRPC max message size (default 104858000 bytes, overridden by `grpcMaxMessageSize` from meta) | Same | gRPC | P0 | — | ✅ |
 | `skip_init_checks` (skips the gRPC health check and the package-version check; meta and the version floor still run) | `skipInitChecks:`, same semantics; the update check is opt-in only | — | P0 | — | ✅ |
 | Hard failure below 1.27.0 (`WeaviateStartUpError`) | `WeaviateStartUpException` below **1.29.0** (a deliberate deviation) | REST meta | P0 | 1.29 | ✅ |
-| `wait_for_weaviate(startup_period)` | `waitForWeaviate(int $seconds)` (public) | REST | P0 | — | ⬜ |
+| `_connection.wait_for_weaviate(startup_period)` (internal in Python, used for embedded) | `waitForWeaviate(int $seconds)`, a **PHP addition**. A timeout throws `WeaviateStartUpException` | REST | P0 | — | ⬜ |
+| `client.integrations.configure(cfg \| list)` (audit) | `$client->integrations->configure(...)`: updates REST headers and gRPC metadata of a connected client | both | P1 | — | ⬜ |
+| `WeaviateClosedClientError` on calls to a closed / never-connected client (audit) | `ClientClosedException` (extends `ConnectionException`) | — | P0 | — | ✅ |
+| Unclosed-client `ResourceWarning` (audit) | Not ported: PHP destroys clients at the end of every FPM request, so `__destruct` closes silently | — | — | — | ⏸ |
+| OIDC failure modes: password grant unsupported, Azure + client_password, `MissingScopeError`, unparseable OIDC config, token-refresh warn-and-retry (audit) | `AuthenticationException`, `MissingScopeException`, logged warnings ([09](09-connection.md) §3) | REST | P0 | — | ⬜ |
+| `InsufficientPermissionsError` (403 and gRPC `PERMISSION_DENIED`; subclass of `UnexpectedStatusCodeError`) | `InsufficientPermissionsException extends UnexpectedStatusCodeException` | both | P0 | — | ✅ |
+| 429 usage/rate limits (e.g. WCD `USAGE_LIMIT_EXCEEDED`) | `UsageLimitException` with `errorCode()`; never retried blindly | REST | P0 | — | ✅ |
 | `client.connect()` / `close()` / context manager | `connect()` / `close()`; `Weaviate::with…(fn)` scoped helper | — | P0 | — | ⬜ |
 | `client.is_ready()` / `is_live()` / `is_connected()` | `isReady()` / `isLive()` / `isConnected()`. Errors return `false`; **`isLive` also runs the gRPC health check** | REST `.well-known` (+ gRPC health) | P0 | — | ✅ |
 | `client.get_meta()` | `getMeta(): Meta` (currently returns the raw array) | REST `/v1/meta` | P0 | — | 🟨 |
@@ -77,9 +85,10 @@ Full spec: **[10: Collections & config](10-collections-and-config.md)**, from Py
 | `ReferenceProperty(name, target_collection)` / `ReferencePropertyMultiTarget(name, target_collections)` | `new ReferenceProperty(...)` / `new ReferencePropertyMultiTarget(...)` (two classes, as in Python) | — | P1 | — | ⬜ |
 | `Configure.Vectors.self_provided / text2vec_* / multi2vec_* / img2vec_* / ref2vec_*` | `Configure::vectors()->selfProvided()`, `->text2vecOpenAI()`, … (generated) | — | P1 | — | ⬜ |
 | `Configure.MultiVectors.*` + encodings (MUVERA) | `Configure::multiVectors()->…`, `->muvera(...)` (gated) | — | P1 | MUVERA 1.31 | ⬜ |
-| `Configure.VectorIndex.hnsw / flat / dynamic / hfresh / none` | `Configure::vectorIndex()->hnsw(...)` etc. | — | P1 | hfresh 1.36 | ⬜ |
+| `Configure.VectorIndex.hnsw / flat / dynamic / hfresh` + 🆕 `none` | `Configure::vectorIndex()->hnsw(...)` etc. | — | P1 | hfresh 1.36 | ⬜ |
+| 🆕 `VectorFilterStrategy.PATHSEER` (vector index filter strategy) | `VectorFilterStrategy::Pathseer` (gated) | — | P6 | 1.40.0 | ⬜ |
 | `Configure.VectorIndex.Quantizer.pq / bq / sq / rq / none` | `Configure::quantizer()->pq(...)` etc. (PQ `encoder.type` is sent correctly; Python sends `type_`) | — | P1 | RQ: HNSW 1.32 / flat 1.34; none: 1.32.4 / 1.33 | ⬜ |
-| `Configure.Generative.*` / `Configure.Reranker.*` | `Configure::generative()->openAI(...)` / `Configure::reranker()->cohere(...)` (generated) | — | P1 | — | ⬜ |
+| `Configure.Generative.*` (22 in v4.23.1; 🆕 `meta` on main) / `Configure.Reranker.*` (7) | `Configure::generative()->openAI(...)` / `Configure::reranker()->cohere(...)` (generated) | — | P1 | — | ⬜ |
 | `Configure.inverted_index(bm25_b, bm25_k1, cleanup_interval_seconds, index_timestamps, index_property_length, index_null_state, stopwords_*)` | `Configure::invertedIndex(...)` | — | P1 | — | ⬜ |
 | `Configure.replication(factor, async_enabled, deletion_strategy)` + `Configure.Replication.async_config(...)` | `Configure::replication(...)` + `Configure::replicationAsyncConfig(...)` (renamed, because PHP can't have both a method and a namespace called `replication`) | — | P1 | async_config 1.36 | ⬜ |
 | `Configure.sharding(virtual_per_physical, desired_count, desired_virtual_count)` | `Configure::sharding(...)` | — | P1 | — | ⬜ |
@@ -91,7 +100,7 @@ Full spec: **[10: Collections & config](10-collections-and-config.md)**, from Py
 | `collection.config.add_property(p)` / `add_reference(r)` | `addProperty()` / `addReference()` | REST | P1 | — | ⬜ |
 | `collection.config.add_vector(...)` | `addVector()` | REST | P1 | 1.31 | ⬜ |
 | `collection.config.delete_property_index(name, IndexName)` | `deletePropertyIndex(name, IndexName)` | REST | P1 | 1.36 | ⬜ |
-| `collection.config.delete_vector_index(name)` | `deleteVectorIndex(name)` | REST | P1 | 1.39 | ⬜ |
+| 🆕 `collection.config.delete_vector_index(name)` | `deleteVectorIndex(name)` | REST | P1 | 1.39 | ⬜ |
 | `collection.config.get_shards()` / `update_shards(status: ShardStatus, shard_names)` | `getShards()` / `updateShards()`, `enum ShardStatus` | REST | P1 | — | ⬜ |
 | `Configure.NamedVectors.*`, `Configure.Vectorizer.*`, legacy `vectorizer_config`/`vector_index_config` arguments, and the functions removed after Q3 '26 | Not ported; legacy JSON still works through `createFromArray` | — | — | — | ⏸ |
 
@@ -136,7 +145,7 @@ Full spec: **[14: Batch](14-batch.md)**. It covers the design without threads (o
 | `batch.dynamic(consistency_level)` | `$client->batch->dynamic(fn (ClientBatcher $b) => …, consistencyLevel:)` → `BatchReport`. Sizing comes from `/v1/nodes` `batchStats`; if that isn't readable (e.g. RBAC), it falls back to 100 × 2 **with a warning** (Python: a silent 10 × 2) | gRPC `BatchObjects` + REST refs | P3 | — | ⬜ |
 | `batch.fixed_size(batch_size=100, concurrent_requests=2, consistency_level)` | `fixedSize(fn, batchSize:, concurrentRequests:, consistencyLevel:)`. Concurrency via `curl_multi` (needs `GrpcTransport::startUnary()/drive()`, see [01](01-architecture.md)) | gRPC + REST refs | P3 | — | ⬜ |
 | `batch.rate_limit(requests_per_minute, consistency_level)` (the value is really **objects** per minute) | `rateLimit(fn, requestsPerMinute:, …)`, documented as objects per minute | gRPC + REST refs | P3 | — | ⬜ |
-| `batch.stream(concurrency)` (server-side batching; `concurrency` is ignored in Python) | `stream(fn, fallbackToDynamic: true)`. Lock-step on ext-grpc/async; falls back to dynamic on unary transports | gRPC `BatchStream` | P3 | **1.36.0 (hard)** | ⬜ |
+| `batch.stream(concurrency, consistency_level)` (server-side batching; `concurrency` is hard-coded to 1 in Python) | `stream(fn, fallbackToDynamic: true)`. Lock-step on ext-grpc/async; falls back to dynamic on unary transports | gRPC `BatchStream` | P3 | **1.36.0 (hard)** | ⬜ |
 | Explicit (not context-manager) use | `start(BatchMode)` → `flush()` / `poll()` / `close()` / `abort()` (PHP addition) | — | P3 | — | ⬜ |
 | `batch.add_object(collection, properties, references, uuid, vector, tenant)` | `ClientBatcher::addObject(...)`; `tenant` takes `string\|Tenant`; the UUID is generated when missing | — | P3 | — | ⬜ |
 | `collection.batch.*.add_object(properties, references, uuid, vector)` | `CollectionBatcher::addObject(...)` (collection, tenant and consistency come from the handle) | — | P3 | — | ⬜ |
@@ -144,7 +153,7 @@ Full spec: **[14: Batch](14-batch.md)**. It covers the design without threads (o
 | `batch.flush()` | `flush()` | — | P3 | — | ⬜ |
 | `number_errors` / `failed_objects` / `failed_references` / `results` | `numberErrors()` / `failedObjects()` / `failedReferences()` / `results()` | — | P3 | — | ⬜ |
 | `BatchObjectReturn`, `BatchReferenceReturn`, `ErrorObject(original_uuid, …)`, `ErrorReference` | readonly result classes | — | P3 | — | ⬜ |
-| `wait_for_vector_indexing(shards, how_many_failures=5)`, `Shard` | `waitForVectorIndexing(?array $shards = null, int $howManyFailures = 5)`, `Shard` | REST | P3 | — | ⬜ |
+| `wait_for_vector_indexing(shards, how_many_failures=5)`, `Shard`. 🆕 main checks every node's `per_node_status` is READY (v4.23.1 checks `vectorQueueSize == 0`) | `waitForVectorIndexing(?array $shards = null, int $howManyFailures = 5)`, `Shard` | REST | P3 | — | ⬜ |
 | Retries: vectorizer rate-limit backoff, gRPC `UNAVAILABLE`, `WEAVIATE_BATCH_MAX_RETRIES` env var | Same rules (worst case is about 34 min by our reading, vs ~10.5 min in Python's comment †) | — | P3 | — | ⬜ |
 | Stream: reconnect, out-of-memory backoff, server shutdown, 160 s GCP renewal | Same, with two Python bugs fixed (refs to failed objects are never sent; objects are no longer lost on the out-of-memory path) | gRPC | P3 | 1.36 | ⬜ |
 | Async client: Python only has `stream()` | The async package offers every mode (a PHP addition) | — | P5 | — | ⬜ |
@@ -163,12 +172,12 @@ Full spec: **[12: Query & generate](12-query-and-generate.md)**. It covers the s
 | `near_object(near_object, …)` | `nearObject(...)` | P2 | — | ⬜ |
 | `near_text(query, move_to, move_away, …)` | `nearText(query:, moveTo: Move, moveAway: Move, …)` | P2 | — | ⬜ |
 | `near_image(near_image, …)` (path, base64, bytes) | `nearImage(string\|\SplFileInfo, …)` | P2 | — | ⬜ |
-| `near_media(media, media_type=AUDIO/VIDEO/THERMAL/DEPTH/IMU)` | `nearMedia(media:, mediaType: NearMediaType)` | P2 | — | ⬜ |
-| `hybrid(query, alpha, vector, query_properties, fusion_type, max_vector_distance, bm25_operator, target_vector, alpha_param, …)` | `hybrid(...)` | P2 | bm25_operator 1.31, alpha_param 1.36.6 | ⬜ |
+| `near_media(media, media_type=IMAGE/AUDIO/VIDEO/THERMAL/DEPTH/IMU)` | `nearMedia(media:, mediaType: NearMediaType)` | P2 | — | ⬜ |
+| `hybrid(query, alpha, vector, query_properties, fusion_type, max_vector_distance, bm25_operator, target_vector, …)` | `hybrid(...)` | P2 | bm25_operator 1.31; on 1.36.6+ `alpha` is sent in the newer `alpha_param` wire field (not a Python parameter) | ⬜ |
 | `BM25Operator.or_(minimum_match)` / `and_()` / `and_cross()` | `BM25Operator::or(...)` / `::and()` / `::andCross()` (gated; Python doesn't gate it, and old servers silently ignore it) | P2 | 1.31; and_cross 1.37.15 / 1.38.8 / 1.39.0 | ⬜ |
 | `NearVector` input forms, including `list_of_vectors` for multi-vector targets | same input shapes | P2 | — | ⬜ |
 | `bm25(query, query_properties, operator)` | `bm25(...)` | P2 | — | ⬜ |
-| Common arguments: `limit`, `offset`, `auto_limit`, `filters`, `rerank`, `include_vector`, `return_metadata`, `return_properties`, `return_references`, `group_by`, `target_vector`, `boost`, `diversity_selection` | Same named arguments | P2 | — | ⬜ |
+| Common arguments: `limit`, `offset`, `auto_limit`, `filters`, `rerank`, `include_vector`, `return_metadata`, `return_properties`, `return_references`, `group_by`, `target_vector` (plus `boost` and `diversity_selection`, which are P6, see below) | Same named arguments | P2 | — | ⬜ |
 | `Filter.by_property(p).equal / not_equal / less_than / less_or_equal / greater_than / greater_or_equal / like / contains_any / contains_all / contains_none / is_none / within_geo_range` | `Filter::byProperty('p')->equal(...)` etc. | P2 | contains_none 1.33.0 | ⬜ |
 | `Filter.by_ref(link_on).by_property(...)`, `by_ref_multi_target`, `by_ref_count` | `Filter::byRef('p')->byProperty(...)`, `byRefMultiTarget()`, `byRefCount()` | P2 | — | ⬜ |
 | `Filter.by_id()`, `by_creation_time()`, `by_update_time()` | `Filter::byId()`, `byCreationTime()`, `byUpdateTime()` | P2 | — | ⬜ |
@@ -195,9 +204,10 @@ Full spec: **[12 §Generate](12-query-and-generate.md)**, including every parame
 | Python API | PHP API | Phase | Min server | Status |
 |---|---|---|---|---|
 | The query methods above, with `single_prompt`, `grouped_task`, `grouped_properties` | `$col->generate->nearText(..., singlePrompt:, groupedTask:, groupedProperties:)` | P2 | — | ⬜ |
-| `GenerativeParameters.single_prompt(prompt, metadata, debug, image_properties, images)` / `.grouped_task(prompt, non_blob_properties, image_properties, images, metadata, debug)` | `GenerativeParameters::singlePrompt(...)` / `::groupedTask(...)`. Images or metadata **without a provider are rejected**, where Python silently drops them | P2 | — | ⬜ |
+| `GenerativeParameters.single_prompt(prompt, metadata, debug, image_properties, images)` / `.grouped_task(prompt, non_blob_properties, image_properties, images, metadata)` (no `debug`) | `GenerativeParameters::singlePrompt(...)` / `::groupedTask(...)`. Images or metadata **without a provider are rejected**, where Python silently drops them | P2 | — | ⬜ |
 | `generative_provider=GenerativeConfig.*` (per query) | `generativeProvider: GenerativeConfig::…` | P2 | — | ⬜ |
 | `GenerativeConfig.openai / azure_openai / anthropic / anyscale / aws_bedrock / aws_sagemaker / cohere / contextualai / databricks / deepseek / digitalocean / dummy / friendliai / google_gemini / google_vertex / meta / mistral / nvidia / ollama / xai / …` | `GenerativeConfig::openAI(...)` etc. (one factory per provider) | P2 | — | ⬜ |
+| 🆕 `GenerativeConfig.meta(base_url, model, temperature, top_p, max_tokens, frequency_penalty, presence_penalty, reasoning_effort)` + `MetaReasoningEffort` | `GenerativeConfig::meta(...)`, `enum MetaReasoningEffort` | P6 | † | ⬜ |
 | `GenerativeConfig.aws` / `.google` (deprecated, to be removed after Q3 '26) | Not ported; use `awsBedrock` / `awsSagemaker` / `googleVertex` / `googleGemini` | — | — | ⏸ |
 | Result: `obj.generative.text / metadata / debug`, grouped `response.generative.*` | `$obj->generative->text`, `->metadata`, `->debug`; `$res->generative->…` | P2 | — | ⬜ |
 | The deprecated `generated` fields | Not ported | — | — | ⏸ |
