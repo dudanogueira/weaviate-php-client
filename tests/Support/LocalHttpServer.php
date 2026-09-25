@@ -28,17 +28,19 @@ final class LocalHttpServer
         fclose($socket);
 
         $this->log = (string) tempnam(sys_get_temp_dir(), 'weaviate-http-log-');
+        // Portable: Windows has no /dev/null, and PHP there needs the inherited environment (SystemRoot, …).
+        $nullDevice = \DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
         $process = proc_open(
-            [\PHP_BINARY, '-S', '127.0.0.1:' . $this->port, __DIR__ . '/router.php'],
-            [0 => ['pipe', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            [\PHP_BINARY, '-S', '127.0.0.1:' . $this->port, __DIR__ . \DIRECTORY_SEPARATOR . 'router.php'],
+            [0 => ['pipe', 'r'], 1 => ['file', $nullDevice, 'w'], 2 => ['file', $nullDevice, 'w']],
             $pipes,
             null,
-            [...$env, 'REQUEST_LOG' => $this->log],
+            [...getenv(), ...$env, 'REQUEST_LOG' => $this->log],
         );
         \assert(\is_resource($process));
         $this->process = $process;
 
-        for ($i = 0; $i < 100; ++$i) {
+        for ($i = 0; $i < 250; ++$i) { // up to 5 s: process start is slower on Windows runners
             $probe = @fsockopen('127.0.0.1', $this->port, $errno, $errstr, 0.1);
             if ($probe !== false) {
                 fclose($probe);
