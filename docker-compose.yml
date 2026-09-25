@@ -1,0 +1,26 @@
+# Local development and integration tests.
+#
+#   docker compose up -d weaviate
+#   bin/php vendor/bin/phpunit --testsuite integration
+#
+# WEAVIATE_VERSION defaults to the version the protos are pinned to (proto/VERSION).
+services:
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:${WEAVIATE_VERSION:-1.39.7}
+    command: ["--host", "0.0.0.0", "--port", "8080", "--scheme", "http"]
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: none
+      ENABLE_MODULES: ""
+      CLUSTER_HOSTNAME: node1
+      DISABLE_TELEMETRY: "true"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30

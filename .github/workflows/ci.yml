@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: PHPStan + code style
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - run: composer validate --strict
+      - run: composer install --no-interaction --no-progress
+      - run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+      - run: vendor/bin/php-cs-fixer fix --dry-run --diff
+      - run: composer audit
+
+  proto-drift:
+    name: Generated protos are up to date
+    runs-on: ubuntu-latest
+    env:
+      PROTOC_VERSION: '35.0'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install protoc
+        run: |
+          curl -fsSL -o /tmp/protoc.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          sudo unzip -q -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
+          protoc --version
+      - run: bin/generate-protos
+      - name: Fail if src/Proto differs from the committed code
+        run: git diff --exit-code -- src/Proto
+
+  unit:
+    name: Unit (PHP ${{ matrix.php }}, ${{ matrix.deps }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4', '8.5']
+        deps: [lowest, stable]
+        os: [ubuntu-latest]
+        include:
+          - { php: '8.4', deps: stable, os: windows-latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Install dependencies
+        shell: bash
+        run: composer update --no-interaction --no-progress ${{ matrix.deps == 'lowest' && '--prefer-lowest' || '' }}
+      - run: vendor/bin/phpunit --testsuite unit
+
+  integration:
+    name: Integration (Weaviate ${{ matrix.weaviate }}, PHP ${{ matrix.php }}, ${{ matrix.grpc && 'ext-grpc + curl' || 'curl' }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The 1.29 floor (ADR 0004) plus the newest patch of the latest minors.
+        weaviate: ['1.29.11', '1.36.23', '1.37.17', '1.38.17', '1.39.7']
+        php: ['8.4']
+        grpc: [false]
+        include:
+          - { weaviate: '1.39.7', php: '8.2', grpc: false }
+          - { weaviate: '1.39.7', php: '8.4', grpc: true }
+    services:
+      weaviate:
+        image: cr.weaviate.io/semitechnologies/weaviate:${{ matrix.weaviate }}
+        ports: ['8080:8080', '50051:50051']
+        env:
+          AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+          PERSISTENCE_DATA_PATH: /var/lib/weaviate
+          DEFAULT_VECTORIZER_MODULE: none
+          CLUSTER_HOSTNAME: node1
+          DISABLE_TELEMETRY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ${{ matrix.grpc && 'grpc' || '' }}
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+      - name: Wait for Weaviate
+        run: |
+          for _ in $(seq 1 60); do
+            curl -fs http://localhost:8080/v1/.well-known/ready && exit 0
+            sleep 1
+          done
+          echo "Weaviate did not become ready" >&2; exit 1
+      - run: php -r 'print_r(curl_version()["version"]); echo PHP_EOL;'
+      - run: vendor/bin/phpunit --testsuite integration

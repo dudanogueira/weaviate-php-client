@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Run PHP inside the dev container, so the host needs no PHP install.
+#
+#   bin/php vendor/bin/phpunit
+#   PHP_VERSION=8.4 DEBIAN=trixie bin/php -v
+#   GRPC=1 bin/php vendor/bin/phpunit      # image with ext-grpc (slow first build)
+#   bin/php composer install
+#
+# The container joins the compose network, so WEAVIATE_HOST=weaviate reaches the server.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PHP_VERSION="${PHP_VERSION:-8.2}"
+DEBIAN="${DEBIAN:-bookworm}"
+if [ -n "${GRPC:-}" ]; then
+    CONTEXT="$ROOT/docker/php-grpc"
+    IMAGE="weaviate-php-client-dev-grpc:${PHP_VERSION}-${DEBIAN}"
+else
+    CONTEXT="$ROOT/docker/php"
+    IMAGE="weaviate-php-client-dev:${PHP_VERSION}-${DEBIAN}"
+fi
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "building $IMAGE (first run only)..." >&2
+    docker build -q --build-arg "PHP_VERSION=${PHP_VERSION}" --build-arg "DEBIAN=${DEBIAN}" -t "$IMAGE" "$CONTEXT" >/dev/null
+fi
+
+NETWORK_ARGS=()
+PROJECT="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
+if docker network inspect "${PROJECT}_default" >/dev/null 2>&1; then
+    NETWORK_ARGS=(--network "${PROJECT}_default" -e WEAVIATE_HOST="${WEAVIATE_HOST:-weaviate}")
+fi
+
+TTY_ARGS=()
+[ -t 0 ] && [ -t 1 ] && TTY_ARGS=(-it)
+
+if [ "${1:-}" = "composer" ]; then
+    shift
+    set -- composer "$@"
+else
+    set -- php "$@"
+fi
+
+exec docker run --rm "${TTY_ARGS[@]}" "${NETWORK_ARGS[@]}" \
+    -v "$ROOT:/app" -v "weaviate-php-client-composer-cache:/tmp/composer-cache" \
+    -w /app "$IMAGE" "$@"

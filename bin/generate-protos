@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Generate PHP protobuf classes from proto/v1 into src/Proto (committed).
+#
+# The upstream protos don't set php_namespace, so we inject it into temporary copies.
+# That keeps every generated class under Weaviate\Client\ (ADR 0005).
+#
+# Uses the host protoc if it matches PROTOC_VERSION, otherwise a pinned protoc in Docker.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROTOC_VERSION="${PROTOC_VERSION:-35.0}"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+mkdir -p "$WORK/in/v1" "$WORK/out"
+for f in "$ROOT"/proto/v1/*.proto; do
+    name="$(basename "$f")"
+    # Insert the PHP options right after the package line.
+    awk '
+        { print }
+        /^package weaviate\.v1;/ {
+            print "option php_namespace = \"Weaviate\\\\Client\\\\Proto\\\\V1\";"
+            print "option php_metadata_namespace = \"Weaviate\\\\Client\\\\Proto\\\\GPBMetadata\\\\V1\";"
+        }
+    ' "$f" > "$WORK/in/v1/$name"
+done
+
+run_protoc() {
+    if command -v protoc >/dev/null && protoc --version | grep -q "libprotoc ${PROTOC_VERSION}"; then
+        protoc "$@"
+    else
+        docker run --rm -v "$WORK:$WORK" -w "$WORK" \
+            "ghcr.io/protocolbuffers/protobuf:v${PROTOC_VERSION}" protoc "$@" 2>/dev/null \
+        || { echo "need protoc ${PROTOC_VERSION} (host or docker)" >&2; exit 1; }
+    fi
+}
+
+run_protoc --proto_path="$WORK/in" --php_out="$WORK/out" "$WORK"/in/v1/*.proto
+
+rm -rf "$ROOT/src/Proto"
+mkdir -p "$ROOT/src/Proto"
+cp -R "$WORK/out/Weaviate/Client/Proto/." "$ROOT/src/Proto/"
+
+count="$(find "$ROOT/src/Proto" -name '*.php' | wc -l | tr -d ' ')"
+echo "generated $count files into src/Proto from protos $(cat "$ROOT/proto/VERSION")"

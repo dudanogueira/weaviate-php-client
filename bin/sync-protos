@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Vendor Weaviate's gRPC .proto files at a pinned server tag into proto/v1/.
+#
+#   bin/sync-protos v1.39.7
+#   bin/generate-protos
+set -euo pipefail
+
+TAG="${1:?usage: bin/sync-protos <weaviate tag, e.g. v1.39.7>}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DEST="$ROOT/proto/v1"
+BASE="https://raw.githubusercontent.com/weaviate/weaviate/${TAG}/grpc/proto/v1"
+LIST_URL="https://api.github.com/repos/weaviate/weaviate/contents/grpc/proto/v1?ref=${TAG}"
+
+files="$(curl -fsSL "$LIST_URL" | grep -o '"name": *"[^"]*\.proto"' | sed 's/.*"\([^"]*\)"$/\1/')"
+[ -n "$files" ] || { echo "no .proto files found for $TAG" >&2; exit 1; }
+
+rm -f "$DEST"/*.proto
+mkdir -p "$DEST"
+for f in $files; do
+    curl -fsSL "$BASE/$f" -o "$DEST/$f"
+    echo "synced $f"
+done
+echo "$TAG" > "$ROOT/proto/VERSION"
+echo "protos pinned to $TAG; now run bin/generate-protos"
