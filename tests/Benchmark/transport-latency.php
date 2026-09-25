@@ -67,7 +67,7 @@ $requests = [
         'collection' => $collection,
         'limit' => 10,
         'uses_127_api' => true,
-        'properties' => new PropertiesRequest(['return_all_nonref_properties' => true]),
+        'properties' => new PropertiesRequest(['non_ref_properties' => ['title', 'n']]),
         'metadata' => new MetadataRequest(['uuid' => true]),
     ]),
     'nearVector(limit 10)' => new SearchRequest([
@@ -78,7 +78,7 @@ $requests = [
             'vector_bytes' => pack('g*', ...$randomVector()),
             'type' => VectorType::VECTOR_TYPE_SINGLE_FP32,
         ])]]),
-        'properties' => new PropertiesRequest(['return_all_nonref_properties' => true]),
+        'properties' => new PropertiesRequest(['non_ref_properties' => ['title', 'n']]),
         'metadata' => new MetadataRequest(['uuid' => true, 'distance' => true]),
     ]),
 ];

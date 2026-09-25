@@ -1,6 +1,6 @@
 # ADR 0002: Pluggable gRPC transport, pure-PHP default
 
-- **Status:** Accepted. The P0 week-1 spike must confirm it.
+- **Status:** Accepted. The spike **passed** on 2026-09-25 ([spike 0001](../spikes/0001-grpc-transport.md)); only the Weaviate Cloud TLS check is still pending.
 - **Date:** 2026-09-25
 
 ## Context
@@ -37,7 +37,7 @@ gRPC over HTTP/2 is a simple wire protocol:
 - Streaming batch without ext-grpc is only available in the async package.
 - The P3 benchmarks compare curl, ext-grpc and async throughput. If curl is far slower, the README will recommend ext-grpc for heavy imports.
 
-## Spike exit criteria (P0, week 1)
+## Spike exit criteria (P0, week 1): results in [spike 0001](../spikes/0001-grpc-transport.md)
 
 1. A unary `Search` works against a local Weaviate over h2c and against Weaviate Cloud over TLS.
 2. A non-OK `grpc-status` maps correctly to `GrpcException`.

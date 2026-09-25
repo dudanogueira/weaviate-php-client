@@ -526,9 +526,11 @@ Filters are immutable and have no identity, so the same `FilterExpression` can b
 | Value | `PropertiesRequest` sent | Object `properties` in the result |
 |---|---|---|
 | `null` or `true`, with no `returnReferences` | **not sent** (the server default: all non-reference, non-blob properties) | all returned |
-| `null` or `true`, with `returnReferences` | `return_all_nonref_properties = true`, plus `ref_properties` | all non-reference properties |
+| `null` or `true`, with `returnReferences` | `return_all_nonref_properties = true`, plus `ref_properties`. **On server 1.29.x:** send the property names explicitly in `non_ref_properties`, resolved from the collection schema (cached per handle) | all non-reference properties |
 | `false` or `[]` | `non_ref_properties = []`, `return_all_nonref_properties = false` | `[]` (not parsed) |
 | `'title'` / `QueryNested` / list | `non_ref_properties = [strings]`, `object_properties = [QueryNested…]`, `return_all_nonref_properties = false` | only those |
+
+> **Verified 2026-09-25 against real servers:** Weaviate **1.29.11 ignores `return_all_nonref_properties`**. It returns results with no `nonRefProps` unless the names are listed in `non_ref_properties`. Versions 1.30.23 through 1.39.7 honour the flag. The P0 spike found this in CI (`GrpcSearchSpikeTest` on 1.29.11). Because 1.29 is the floor ([ADR 0004](decisions/0004-server-version-floor.md)), the query builder needs the schema-resolving path for 1.29.x only. Python's behaviour on 1.29 wasn't checked; it may have the same gap.
 
 - Duplicates are removed while keeping first-seen order. Python uses a `set`, so its order isn't defined; order has no semantic effect.
 - Blob properties are only returned when named explicitly.

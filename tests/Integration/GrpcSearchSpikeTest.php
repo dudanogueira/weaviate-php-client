@@ -23,6 +23,8 @@ use Weaviate\Client\WeaviateClient;
 /**
  * ADR 0002 spike, exit criteria 1 and 2: unary Search works over each transport, and a non-OK grpc-status
  * maps to GrpcException. Uses raw protobuf messages; the typed query API comes in P2.
+ *
+ * Properties are listed explicitly: Weaviate 1.29 ignores return_all_nonref_properties (1.30+ honours it).
  */
 final class GrpcSearchSpikeTest extends IntegrationTestCase
 {
@@ -49,7 +51,7 @@ final class GrpcSearchSpikeTest extends IntegrationTestCase
                 'collection' => $collection,
                 'limit' => 10,
                 'uses_127_api' => true,
-                'properties' => new PropertiesRequest(['return_all_nonref_properties' => true]),
+                'properties' => new PropertiesRequest(['non_ref_properties' => ['title']]),
                 'metadata' => new MetadataRequest(['uuid' => true]),
             ]));
             self::assertCount(3, $fetch->getResults());
@@ -68,7 +70,7 @@ final class GrpcSearchSpikeTest extends IntegrationTestCase
                     'vector_bytes' => pack('g*', 0.0, 0.0, 1.0),
                     'type' => VectorType::VECTOR_TYPE_SINGLE_FP32,
                 ])]]),
-                'properties' => new PropertiesRequest(['return_all_nonref_properties' => true]),
+                'properties' => new PropertiesRequest(['non_ref_properties' => ['title']]),
                 'metadata' => new MetadataRequest(['uuid' => true, 'distance' => true]),
             ]));
             self::assertCount(1, $near->getResults());

@@ -30,7 +30,13 @@ Sizes are rough estimates for one engineer who works full-time on the client and
 - Startup checks: meta, the version floor (a hard failure below 1.29), gRPC health.
 - `ServerVersion` gating, and the exception hierarchy.
 - `isReady`, `isLive`, `getMeta`, `getOpenIdConfiguration`.
-- **Spike (week 1):** prove `CurlGrpcTransport` against a real server for a unary `Search`, both h2c (local) and TLS (Weaviate Cloud). Measure latency against ext-grpc. The go/no-go decision for [ADR 0002](decisions/0002-pluggable-grpc-transport.md) is made here.
+- **Spike (week 1): done, GO** ([spike 0001](spikes/0001-grpc-transport.md)).
+  - curl matches ext-grpc latency when libcurl is 8.4 or later.
+  - Older libcurl falls back to a fresh connection per call.
+  - The Weaviate Cloud TLS check is pending.
+- **P0 progress (2026-09-25):**
+  - Done: repo, CI, proto codegen, both gRPC transports, the REST transport, the connect helpers, API-key auth, the startup checks and the exception base.
+  - Remaining: OIDC, TLS/mTLS config, per-protocol proxies, grpc-web, a typed `Meta` result, and retries.
 
 ## P1: Schema, data and tenants → `0.2.0-alpha` (about 4 weeks)
 
